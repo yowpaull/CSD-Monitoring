@@ -3,18 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-    LayoutDashboard,
     SquareCheckBig,
-    UsersRound,
     LogOut,
+    User,
     Sparkles,
     ChevronRight,
-    User,
 } from 'lucide-react';
-
-import { logout } from '@/lib/actions/auth';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { logout } from '@/lib/actions/auth';
 
 interface NavigationLink {
     icon: React.ReactNode;
@@ -27,7 +24,7 @@ interface Profile {
     email: string | null;
 }
 
-export default function AdminLayout({
+export default function UserLayout({
     children,
 }: {
     children: React.ReactNode;
@@ -39,24 +36,14 @@ export default function AdminLayout({
 
     const NavigationLinks: NavigationLink[] = [
         {
-            icon: <LayoutDashboard size={18} />,
-            name: 'Dashboard',
-            href: '/admin/dashboard',
-        },
-        {
             icon: <SquareCheckBig size={18} />,
-            name: 'Tasks',
-            href: '/admin/tasks',
-        },
-        {
-            icon: <UsersRound size={18} />,
-            name: 'Team',
-            href: '/admin/team',
+            name: 'My Tasks',
+            href: '/user/task',
         },
         {
             icon: <User size={18} />,
             name: 'Profile',
-            href: '/admin/profile',
+            href: '/user/profile',
         },
     ];
 
@@ -122,7 +109,7 @@ export default function AdminLayout({
                 {/* Brand */}
                 <div className="flex h-16 items-center border-b border-white/[0.06] px-5">
                     <Link
-                        href="/admin/dashboard"
+                        href="/user/task"
                         className="flex items-center gap-3"
                     >
                         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 shadow-lg shadow-indigo-600/20">
@@ -135,7 +122,7 @@ export default function AdminLayout({
                             </p>
 
                             <p className="text-[11px] text-white/40">
-                                Admin Panel
+                                Workspace
                             </p>
                         </div>
                     </Link>
@@ -144,7 +131,7 @@ export default function AdminLayout({
                 {/* Navigation */}
                 <nav className="flex-1 px-3 py-6">
                     <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/30">
-                        Workspace
+                        Menu
                     </p>
 
                     <ul className="space-y-1">
@@ -196,8 +183,6 @@ export default function AdminLayout({
 
                 {/* Bottom */}
                 <div className="border-t border-white/[0.06] p-3">
-
-                    {/* Logout */}
                     <form action={logout}>
                         <button
                             type="submit"
@@ -218,17 +203,17 @@ export default function AdminLayout({
 
                     <div>
                         <h1 className="text-sm font-semibold text-slate-900">
-                            Admin Dashboard
+                            My Workspace
                         </h1>
 
                         <p className="text-xs text-slate-400">
-                            Manage your workspace
+                            Manage your tasks and profile
                         </p>
                     </div>
 
                     {/* User */}
                     <Link
-                        href="/admin/profile"
+                        href="/user/profile"
                         className="group flex items-center gap-3 rounded-xl px-2 py-1.5 transition hover:bg-slate-50"
                     >
                         <div className="hidden text-right sm:block">
@@ -249,7 +234,7 @@ export default function AdminLayout({
                     </Link>
                 </header>
 
-                {/* White Content Area */}
+                {/* Content */}
                 <div className="flex-1 bg-white p-6 lg:p-8">
                     {children}
                 </div>
