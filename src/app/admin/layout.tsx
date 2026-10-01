@@ -5,11 +5,14 @@ import { usePathname } from 'next/navigation';
 import {
     LayoutDashboard,
     SquareCheckBig,
+    ScrollText,
+    SportShoe,
     UsersRound,
     LogOut,
     Sparkles,
     ChevronRight,
     User,
+    Store,
 } from 'lucide-react';
 
 import { logout } from '@/lib/actions/auth';
@@ -44,9 +47,24 @@ export default function AdminLayout({
             href: '/admin/dashboard',
         },
         {
+            icon: <ScrollText size={18} />,
+            name: 'Customer Inquiry Logs',
+            href: '/admin/inquiry-logs',
+        },
+        {
+            icon: <SportShoe size={18} />,
+            name: 'Brands',
+            href: '/admin/brands',
+        },
+        {
+            icon: <Store size={18} />,
+            name: 'Platforms',
+            href: '/admin/platforms',
+        },
+        {
             icon: <SquareCheckBig size={18} />,
-            name: 'Tasks',
-            href: '/admin/tasks',
+            name: 'Inquiry Types',
+            href: '/admin/inquiry-types',
         },
         {
             icon: <UsersRound size={18} />,

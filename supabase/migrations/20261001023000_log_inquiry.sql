@@ -25,18 +25,18 @@ create table public.log_inquiries (
 
     customer_name varchar(150) not null,
 
-    thread_number varchar(100),
+    thread_number integer not null,
 
-    quantity integer not null default 0
-        check (quantity >= 0),
+    quantity integer not null default 1
+        check (quantity > 0),
 
     order_number varchar(100),
 
     item varchar(255),
 
-    customer_concern text not null,
+    customer_concern text,
 
-    action_response text not null,
+    action_response text,
 
     status varchar(50) not null default 'Open'
         check (
