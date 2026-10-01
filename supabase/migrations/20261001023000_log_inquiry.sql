@@ -43,7 +43,7 @@ create table public.log_inquiries (
             status in (
                 'Open',
                 'Pending',
-                'Closed',
+                'Closed'
             )
         ),
 
