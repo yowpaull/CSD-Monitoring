@@ -37,8 +37,8 @@ export default function UserLayout({
     const NavigationLinks: NavigationLink[] = [
         {
             icon: <SquareCheckBig size={18} />,
-            name: 'My Tasks',
-            href: '/user/task',
+            name: 'Log',
+            href: '/user/log',
         },
         {
             icon: <User size={18} />,
@@ -109,7 +109,7 @@ export default function UserLayout({
                 {/* Brand */}
                 <div className="flex h-16 items-center border-b border-white/[0.06] px-5">
                     <Link
-                        href="/user/task"
+                        href="/user/log"
                         className="flex items-center gap-3"
                     >
                         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 shadow-lg shadow-indigo-600/20">
@@ -118,11 +118,11 @@ export default function UserLayout({
 
                         <div>
                             <p className="text-sm font-semibold tracking-tight">
-                                TaskBoard
+                                CSD Monitoring
                             </p>
 
                             <p className="text-[11px] text-white/40">
-                                Workspace
+                                2026
                             </p>
                         </div>
                     </Link>
@@ -207,7 +207,7 @@ export default function UserLayout({
                         </h1>
 
                         <p className="text-xs text-slate-400">
-                            Manage your tasks and profile
+                            Manage your logs
                         </p>
                     </div>
 

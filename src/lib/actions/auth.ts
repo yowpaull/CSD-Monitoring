@@ -80,7 +80,7 @@ export async function login(_prevState: ActionResult | null, formData: FormData)
         redirect('/admin/dashboard');
     }
 
-    redirect('/user/task');
+    redirect('/user/log');
 }
 
 export async function signup(_prevState: ActionResult | null,formData: FormData): Promise<ActionResult> {
@@ -110,10 +110,8 @@ export async function signup(_prevState: ActionResult | null,formData: FormData)
         };
     }
 
-    console.log("Zod passed:", parsed.data);
-
     const supabase = await createClient();
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
         email: parsed.data.email,
         password: parsed.data.password,
         options: {
@@ -122,17 +120,6 @@ export async function signup(_prevState: ActionResult | null,formData: FormData)
             role: parsed.data.role,
         },
         },
-    });
-
-    console.log("Supabase response:", {
-        data,
-        error: error
-            ? {
-                message: error.message,
-                code: error.code,
-                status: error.status,
-            }
-            : null,
     });
 
     if (error) {
@@ -157,7 +144,7 @@ export async function signup(_prevState: ActionResult | null,formData: FormData)
     }
 
     return {
-        message: 'Account created successfully! Please check the email to verify your account.',
+        message: 'Account created successfully!',
     };
 }
 
