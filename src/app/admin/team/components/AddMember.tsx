@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionResult, signup } from "@/lib/actions/auth";
+import { useActionToast } from "@/lib/hooks/useActionToast";
 import { memo, useActionState, useEffect, useRef } from "react";
 
 interface AddMemberProps {
@@ -19,6 +20,8 @@ const inputClassName =
 function AddMember({ isOpen, onClose, onMemberAdded }: AddMemberProps) {
     const [state, formAction, isPending] = useActionState(signup, initialState);
     const formRef = useRef<HTMLFormElement>(null);
+
+    useActionToast(state, "Unable to add member. Please try again.");
 
     useEffect(() => {
         if (!isOpen) return;

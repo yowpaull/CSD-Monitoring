@@ -1,12 +1,15 @@
 'use client';
 
 import { ActionResult, login } from "@/lib/actions/auth";
+import { useActionToast } from "@/lib/hooks/useActionToast";
 import { useActionState } from "react";
 
 export default function Home() {
 
   const initialState: ActionResult = {}
   const[state, formAction, isPending] = useActionState(login, initialState);
+
+  useActionToast(state, "Unable to log in. Please try again.");
 
   return (
     <main className="flex min-h-screen">

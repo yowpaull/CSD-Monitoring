@@ -12,6 +12,7 @@ import {
     updateBrand,
     deleteBrand,
 } from '@/lib/actions/brand';
+import { toast } from 'react-toastify';
 
 type Brand = {
     id: string;
@@ -78,6 +79,7 @@ export default function BrandsClient({
 
         if (result.error) {
             setError(result.error);
+            toast.error(result.error);
             setLoading(false);
             return;
         }
@@ -85,6 +87,8 @@ export default function BrandsClient({
         setShowAddModal(false);
         setBrandName('');
         setLoading(false);
+
+        toast.success(result.message ?? 'Brand created successfully.');
 
         window.location.reload();
     }
@@ -103,6 +107,7 @@ export default function BrandsClient({
 
         if (result.error) {
             setError(result.error);
+            toast.error(result.error);
             setLoading(false);
             return;
         }
@@ -110,6 +115,8 @@ export default function BrandsClient({
         setShowEditModal(false);
         setSelectedBrand(null);
         setLoading(false);
+
+        toast.success(result.message ?? 'Brand updated successfully.');
 
         window.location.reload();
     }
@@ -126,6 +133,7 @@ export default function BrandsClient({
 
         if (result.error) {
             setError(result.error);
+            toast.error(result.error);
             setLoading(false);
             return;
         }
@@ -133,6 +141,8 @@ export default function BrandsClient({
         setShowDeleteModal(false);
         setSelectedBrand(null);
         setLoading(false);
+
+        toast.success(result.message ?? 'Brand deleted successfully.');
 
         window.location.reload();
     }

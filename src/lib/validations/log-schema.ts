@@ -10,9 +10,6 @@ export const logSchema = z.object({
     brand_id: z
         .string()
         .min(1, { message: 'Brand is required' }),
-    representative_id: z
-        .string()
-        .min(1, { message: 'Representative is required' }),
     inquiry_sub_category_id: z
         .string()
         .min(1, { message: 'Type of Inquiry is required' }),
@@ -26,9 +23,11 @@ export const logSchema = z.object({
         .string()
         .min(1, { message: 'Customer name is required' }),
     thread_number: z
+        .coerce
         .number()
         .min(1, { message: 'Thread number is required' }),
     quantity: z
+        .coerce
         .number()
         .min(1, { message: 'Quantity is required' }),
     order_number: z

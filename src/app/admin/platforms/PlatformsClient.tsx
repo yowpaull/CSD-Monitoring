@@ -13,6 +13,7 @@ import {
     updatePlatform,
     deletePlatform,
 } from '@/lib/actions/platform';
+import { toast } from 'react-toastify';
 
 type Platform = {
     id: string;
@@ -79,6 +80,7 @@ export default function PlatformsClient({
 
         if (result.error) {
             setError(result.error);
+            toast.error(result.error);
             setLoading(false);
             return;
         }
@@ -86,6 +88,10 @@ export default function PlatformsClient({
         setShowAddModal(false);
         setPlatformName('');
         setLoading(false);
+
+        toast.success(
+            result.message ?? 'Platform created successfully.'
+        );
 
         window.location.reload();
     }
@@ -104,6 +110,7 @@ export default function PlatformsClient({
 
         if (result.error) {
             setError(result.error);
+            toast.error(result.error);
             setLoading(false);
             return;
         }
@@ -111,6 +118,10 @@ export default function PlatformsClient({
         setShowEditModal(false);
         setSelectedPlatform(null);
         setLoading(false);
+
+        toast.success(
+            result.message ?? 'Platform updated successfully.'
+        );
 
         window.location.reload();
     }
@@ -127,6 +138,7 @@ export default function PlatformsClient({
 
         if (result.error) {
             setError(result.error);
+            toast.error(result.error);
             setLoading(false);
             return;
         }
@@ -134,6 +146,10 @@ export default function PlatformsClient({
         setShowDeleteModal(false);
         setSelectedPlatform(null);
         setLoading(false);
+
+        toast.success(
+            result.message ?? 'Platform deleted successfully.'
+        );
 
         window.location.reload();
     }

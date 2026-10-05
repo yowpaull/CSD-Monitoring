@@ -12,6 +12,7 @@ import {
     updateInquirySubCategory,
     deleteInquirySubCategory,
 } from '@/lib/actions/inquiry-categories';
+import { toast } from 'react-toastify';
 
 type SubCategory = {
     id: string;
@@ -149,7 +150,15 @@ export default function InquiryCategoriesClient({
 
         if (result?.success) {
             setModal(null);
+
+            toast.success(
+                result.message ?? 'Saved successfully.'
+            );
         } else {
+            toast.error(
+                result?.message ?? 'Something went wrong.'
+            );
+
             alert(result?.message ?? 'Something went wrong.');
         }
     };
@@ -173,7 +182,10 @@ export default function InquiryCategoriesClient({
             await deleteInquiryCategory(id);
 
         if (!result.success) {
+            toast.error(result.message);
             alert(result.message);
+        } else {
+            toast.success(result.message);
         }
     };
 
@@ -192,7 +204,10 @@ export default function InquiryCategoriesClient({
             await deleteInquiryMainCategory(id);
 
         if (!result.success) {
+            toast.error(result.message);
             alert(result.message);
+        } else {
+            toast.success(result.message);
         }
     };
 
@@ -211,7 +226,10 @@ export default function InquiryCategoriesClient({
             await deleteInquirySubCategory(id);
 
         if (!result.success) {
+            toast.error(result.message);
             alert(result.message);
+        } else {
+            toast.success(result.message);
         }
     };
 
