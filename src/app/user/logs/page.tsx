@@ -5,9 +5,14 @@ import {
 } from '@/lib/queries/inquiry-logs';
 import { parseLogFilters, parseLogPagination } from '@/lib/inquiry-log';
 
-export default async function InquiryLogsPage({
+/**
+ * Representative-facing log list. Shares the admin component but is
+ * pinned to `own` scope, which both filters on the signed-in user and
+ * drops the redundant Representative dropdown.
+ */
+export default async function MyLogsPage({
     searchParams,
-}: PageProps<'/admin/inquiry-logs'>) {
+}: PageProps<'/user/logs'>) {
     const params = await searchParams;
 
     const filters = parseLogFilters(params);
@@ -17,23 +22,21 @@ export default async function InquiryLogsPage({
         await Promise.all([
             getInquiryLogFilterOptions(),
             getInquiryLogs({
-                scope: 'admin',
+                scope: 'own',
                 filters,
                 page,
                 pageSize,
             }),
         ]);
 
-    // Remounting on every query-string change keeps the uncontrolled
-    // filter inputs in step with the URL, including on back/forward.
     const viewKey = JSON.stringify([filters, currentPage, pageSize]);
 
     return (
         <InquiryLogsView
             key={viewKey}
-            scope="admin"
-            title="Customer Inquiry Logs"
-            description="Manage and monitor customer inquiry logs."
+            scope="own"
+            title="My Inquiry Logs"
+            description="Every inquiry you have logged, newest first."
             rows={rows}
             totalCount={totalCount}
             page={currentPage}

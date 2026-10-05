@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
     SquareCheckBig,
+    ScrollText,
     LogOut,
     User,
     Sparkles,
@@ -39,6 +40,11 @@ export default function UserLayout({
             icon: <SquareCheckBig size={18} />,
             name: 'Log',
             href: '/user/log',
+        },
+        {
+            icon: <ScrollText size={18} />,
+            name: 'My Logs',
+            href: '/user/logs',
         },
         {
             icon: <User size={18} />,
