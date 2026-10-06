@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
     useCallback,
+    useMemo,
     useRef,
+    useState,
     useTransition,
     type ChangeEvent,
     type FormEvent,
@@ -27,6 +29,11 @@ import {
     statusBadgeClass,
     totalMinutesBetween,
 } from '@/lib/inquiry-log';
+
+import LogRowModals, {
+    type LogFormOptions,
+    type LogRowModal,
+} from './LogRowModals';
 
 import type {
     InquiryLogFilterOptions,
@@ -76,9 +83,58 @@ export default function InquiryLogsView({
 
     const filtersActive = hasActiveLogFilters(filters);
 
+    /*
+     * The reference data the edit form needs, narrowed from the filter
+     * options. Memoised so every row shares one object identity —
+     * otherwise each render would hand the memoised modals new props and
+     * defeat the comparison.
+     */
+    const formOptions: LogFormOptions = useMemo(
+        () => ({
+            platforms: options.platforms,
+            brands: options.brands,
+            categories: options.categories,
+        }),
+        [options.platforms, options.brands, options.categories]
+    );
+
     const firstRow = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
     const lastRow = Math.min(page * pageSize, totalCount);
     const totalPages = Math.ceil(totalCount / pageSize);
+
+    /*
+     * Row modal state lives here, not on `LogRow`, and that placement is
+     * load-bearing.
+     *
+     * A successful delete calls `revalidatePath` server-side and then
+     * `router.refresh()`, which removes the row from `rows` — and with it
+     * any modal mounted inside that row's `<td>`. The action result would
+     * then never reach the component holding `useActionState`, so no
+     * success toast could ever fire. Holding the state at table level
+     * keeps the modal mounted across the refresh; the cleared
+     * `activeRow` lookup below then drops it once the row is gone.
+     */
+    const [activeModal, setActiveModal] = useState<{
+        row: InquiryLogRow;
+        modal: LogRowModal;
+    } | null>(null);
+
+    const closeModal = useCallback(() => setActiveModal(null), []);
+
+    /*
+     * Prefer the row from the latest server payload, so an open edit form
+     * does not keep showing values that were just changed elsewhere. Falls
+     * back to the captured row while it is still present (and during the
+     * window where a deleted row has left `rows` but the modal is closing).
+     */
+    const activeRow = useMemo(() => {
+        if (!activeModal) return null;
+
+        return (
+            rows.find((row) => row.id === activeModal.row.id) ??
+            activeModal.row
+        );
+    }, [activeModal, rows]);
 
     const pageHref = useCallback(
         (target: number) => {
@@ -203,14 +259,6 @@ export default function InquiryLogsView({
                         </p>
                     </div>
 
-                    <button
-                        type="button"
-                        disabled
-                        title="Creating logs from the admin panel is not available yet"
-                        className="shrink-0 cursor-not-allowed rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white opacity-50"
-                    >
-                        Add Inquiry Log
-                    </button>
                 </div>
 
 
@@ -568,13 +616,38 @@ export default function InquiryLogsView({
                                     </tr>
                                 ) : (
                                     rows.map((row) => (
-                                        <LogRow key={row.id} row={row} />
+                                        <LogRow
+                                            key={row.id}
+                                            row={row}
+                                            onOpenModal={(modal) =>
+                                                setActiveModal({
+                                                    row,
+                                                    modal,
+                                                })
+                                            }
+                                        />
                                     ))
                                 )}
                             </tbody>
                         </table>
                     </div>
                 </div>
+
+                {/* ROW MODALS
+                    *
+                    * Mounted outside the table so a delete does not
+                    * unmount the component that owns the action state
+                    * before it can report success.
+                    */}
+
+                {activeRow && (
+                    <LogRowModals
+                        row={activeRow}
+                        modal={activeModal?.modal ?? null}
+                        options={formOptions}
+                        onClose={closeModal}
+                    />
+                )}
 
 
                 {/* PAGINATION */}
@@ -726,7 +799,13 @@ function PageLink({
    TABLE ROW
    ========================================================= */
 
-function LogRow({ row }: { row: InquiryLogRow }) {
+function LogRow({
+    row,
+    onOpenModal,
+}: {
+    row: InquiryLogRow;
+    onOpenModal: (modal: LogRowModal) => void;
+}) {
     const inquiry = formatTimestampParts(row.inquiry_datetime);
     const created = formatTimestampParts(row.created_at);
     const updated = formatTimestampParts(row.updated_at);
@@ -895,23 +974,29 @@ function LogRow({ row }: { row: InquiryLogRow }) {
             {/* Actions */}
             <td className={TD_CLASS}>
                 <div className="flex gap-2">
-                    {(['View', 'Edit', 'Remove'] as const).map(
-                        (action) => (
-                            <button
-                                key={action}
-                                type="button"
-                                disabled
-                                title={`${action} is not available yet`}
-                                className={
-                                    action === 'Remove'
-                                        ? 'cursor-not-allowed rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600 opacity-50'
-                                        : 'cursor-not-allowed rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 opacity-50'
-                                }
-                            >
-                                {action}
-                            </button>
-                        )
-                    )}
+                    <button
+                        type="button"
+                        onClick={() => onOpenModal({ kind: 'view' })}
+                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    >
+                        View
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => onOpenModal({ kind: 'edit' })}
+                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    >
+                        Edit
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => onOpenModal({ kind: 'delete' })}
+                        className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                    >
+                        Delete
+                    </button>
                 </div>
             </td>
         </tr>

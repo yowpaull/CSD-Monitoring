@@ -2,7 +2,7 @@
 
 import { ActionResult, log } from '@/lib/actions/log';
 import { useActionToast } from '@/lib/hooks/useActionToast';
-import { useActionState } from 'react';
+import { useActionState, useEffect } from 'react';
 
 type Platform = {
     id: string;
@@ -38,11 +38,68 @@ type InquiryCategory = {
     inquiry_main_categories: MainCategory[];
 };
 
+/**
+ * Field values as they arrive from a form. Used to seed the form when
+ * editing an existing log.
+ */
+export type LogFormValues = Partial<{
+    inquiry_datetime: string;
+    platform_id: string;
+    brand_id: string;
+    inquiry_sub_category_id: string;
+    start_attended: string;
+    end_attended: string;
+    customer_name: string;
+    thread_number: string;
+    order_number: string;
+    item: string;
+    customer_concern: string;
+    action_response: string;
+    status: string;
+    remarks: string;
+}>;
+
 type LogFormProps = {
     platforms: Platform[];
     brands: Brand[];
     currentUser: CurrentUser | null;
     categories: InquiryCategory[];
+
+    /**
+     * Defaults to the create action. Pass `updateLog` to edit an existing
+     * row — the signature matches because `useActionState` owns the
+     * previous-state argument.
+     */
+    action?: (
+        state: ActionResult | null,
+        formData: FormData
+    ) => Promise<ActionResult>;
+
+    /**
+     * Seeds every control when editing. `state.enteredValues` still wins,
+     * so a field the server rejected comes back showing what was typed
+     * rather than the value it started from.
+     */
+    initialValues?: LogFormValues;
+
+    /**
+     * Extra hidden inputs rendered inside the form. Edit needs the target
+     * row id, and a `<form>` cannot be nested to smuggle it in.
+     */
+    hiddenFields?: Record<string, string>;
+
+    /**
+     * Overrides the read-only representative field. An admin editing
+     * somebody else's log is not the representative.
+     */
+    representativeName?: string;
+
+    title?: string;
+    description?: string;
+    submitLabel?: string;
+
+    /** Called after a successful submit, before the caller's own close. */
+    onSuccess?: () => void;
 };
 
 export default function LogForm({
@@ -50,12 +107,36 @@ export default function LogForm({
     brands,
     currentUser,
     categories,
+    action = log,
+    initialValues,
+    hiddenFields,
+    representativeName,
+    title = 'Log Customer Inquiry',
+    description = 'Capture and categorize real-time customer conversation details',
+    submitLabel = 'Submit Log',
+    onSuccess,
 }: LogFormProps) {
     const initialState: ActionResult = {};
 
-    const [state, formAction, isPending] = useActionState(log, initialState);
+    const [state, formAction, isPending] = useActionState(action, initialState);
 
     useActionToast(state, 'Failed to log inquiry. Please try again.');
+
+    /*
+     * Fires once per successful result. The create page ignores it; the
+     * edit modal uses it to refresh the table and dismiss itself, which
+     * keeps the action state owned by the form that owns the submit
+     * button rather than by a second `useActionState` elsewhere.
+     */
+    const succeeded = Boolean(state?.success);
+
+    useEffect(() => {
+        if (!succeeded) return;
+        onSuccess?.();
+    }, [succeeded, onSuccess]);
+
+    const seed = (field: keyof LogFormValues) =>
+        state.enteredValues?.[field] ?? initialValues?.[field] ?? '';
 
     return (
         <div className="mx-auto max-w-5xl rounded-2xl border border-slate-200/80 bg-[#F8FBFD] shadow-sm">
@@ -64,11 +145,11 @@ export default function LogForm({
             <div>
                 <div className="flex items-center gap-2">
                     <h2 className="text-lg font-semibold tracking-tight text-slate-900">
-                        Log Customer Inquiry
+                        {title}
                     </h2>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                    Capture and categorize real-time customer conversation details
+                    {description}
                 </p>
             </div>
         </div>
@@ -76,6 +157,11 @@ export default function LogForm({
         <div className="p-6 md:p-8">
 
             <form action={formAction} className="space-y-8">
+
+                {hiddenFields &&
+                    Object.entries(hiddenFields).map(([name, value]) => (
+                        <input key={name} type="hidden" name={name} value={value} />
+                    ))}
 
                 {/* GENERAL INFORMATION */}
                 <section className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-xs transition-shadow hover:shadow-sm md:p-6">
@@ -97,7 +183,7 @@ export default function LogForm({
                                 type="datetime-local"
                                 name="inquiry_datetime"
                                 required
-                                defaultValue={state.enteredValues?.inquiry_datetime ?? ''}
+                                defaultValue={seed('inquiry_datetime')}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                             />
                             {state.fieldErrors?.inquiry_datetime && (
@@ -113,7 +199,7 @@ export default function LogForm({
                             <select
                                 name="platform_id"
                                 required
-                                defaultValue={state.enteredValues?.platform_id ?? ''}
+                                defaultValue={seed('platform_id')}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                             >
                                 <option value="" disabled>
@@ -145,7 +231,7 @@ export default function LogForm({
                             <select
                                 name="brand_id"
                                 required
-                                defaultValue={state.enteredValues?.brand_id ?? ''}
+                                defaultValue={seed('brand_id')}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                             >
                                 <option value="" disabled>
@@ -176,7 +262,11 @@ export default function LogForm({
 
                             <input
                                 type="text"
-                                value={currentUser?.full_name ?? ''}
+                                value={
+                                    representativeName ??
+                                    currentUser?.full_name ??
+                                    ''
+                                }
                                 readOnly
                                 className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm text-slate-600"
                             />
@@ -190,7 +280,7 @@ export default function LogForm({
                             <select
                                 name="inquiry_sub_category_id"
                                 required
-                                defaultValue={state.enteredValues?.inquiry_sub_category_id ?? ''}
+                                defaultValue={seed('inquiry_sub_category_id')}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                             >
                                 <option value="" disabled>
@@ -252,7 +342,7 @@ export default function LogForm({
                                 type="time"
                                 name="start_attended"
                                 required
-                                defaultValue={state.enteredValues?.start_attended ?? ''}
+                                defaultValue={seed('start_attended')}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                             />
                             {state.fieldErrors?.start_attended && (
@@ -268,7 +358,7 @@ export default function LogForm({
                                 type="time"
                                 name="end_attended"
                                 required
-                                defaultValue={state.enteredValues?.end_attended ?? ''}
+                                defaultValue={seed('end_attended')}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                             />
                             {state.fieldErrors?.end_attended && (
@@ -303,7 +393,7 @@ export default function LogForm({
                                 type="text"
                                 name="customer_name"
                                 required
-                                defaultValue={state.enteredValues?.customer_name ?? ''}
+                                defaultValue={seed('customer_name')}
                                 placeholder="Enter customer name"
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                             />
@@ -321,7 +411,7 @@ export default function LogForm({
                                 name="thread_number"
                                 min="0"
                                 defaultValue={
-                                    state.enteredValues?.thread_number ?? 0
+                                    state.enteredValues?.thread_number ?? initialValues?.thread_number ?? 0
                                 }
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                             />
@@ -338,7 +428,7 @@ export default function LogForm({
                                 type="text"
                                 name="order_number"
                                 placeholder="Enter order number"
-                                defaultValue={state.enteredValues?.order_number ?? ''}
+                                defaultValue={seed('order_number')}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                             />
                             {state.fieldErrors?.order_number && (
@@ -350,16 +440,21 @@ export default function LogForm({
                             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1.5">
                                 Quantity <span className="text-rose-500">*</span>
                             </label>
-                            <input
-                                type="number"
-                                name="quantity"
-                                min="1"
-                                readOnly
-                                defaultValue={
-                                    1
-                                }
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
-                            />
+                            {/*
+                                 * Quantity is always exactly 1 for this
+                                 * workflow, so it is not an input at all.
+                                 * A `readOnly` number input would still be
+                                 * mutable via the stepper arrows, and
+                                 * `disabled` would drop the field from the
+                                 * submission entirely — so the visible
+                                 * value is static text and the field that
+                                 * actually posts is hidden.
+                             */}
+                            <input type="hidden" name="quantity" value="1" />
+
+                            <div className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3.5 py-2 text-sm text-slate-600">
+                                1
+                            </div>
                             {state.fieldErrors?.quantity && (
                                 <p className="text-red-500 text-xs">{state.fieldErrors.quantity[0]}</p>
                             )}
@@ -373,7 +468,7 @@ export default function LogForm({
                                 type="text"
                                 name="item"
                                 placeholder="Enter item/product"
-                                defaultValue={state.enteredValues?.item ?? ''}
+                                defaultValue={seed('item')}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                             />
                             {state.fieldErrors?.item && (
@@ -402,7 +497,7 @@ export default function LogForm({
                             name="customer_concern"
                             rows={4}
                             placeholder="Describe the customer's concern..."
-                            defaultValue={state.enteredValues?.customer_concern ?? ''}
+                            defaultValue={seed('customer_concern')}
                             className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 leading-relaxed resize-y"
                         />
                         {state.fieldErrors?.customer_concern && (
@@ -418,7 +513,7 @@ export default function LogForm({
                             name="action_response"
                             rows={4}
                             placeholder="Describe the action or response..."
-                            defaultValue={state.enteredValues?.action_response ?? ''}
+                            defaultValue={seed('action_response')}
                             className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 leading-relaxed resize-y"
                         />
                         {state.fieldErrors?.action_response && (
@@ -434,7 +529,7 @@ export default function LogForm({
                             <select
                                 name="status"
                                 required
-                                defaultValue={state.enteredValues?.status ?? ''}
+                                defaultValue={seed('status')}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20"
                             >
                                 <option value="" disabled>
@@ -457,7 +552,7 @@ export default function LogForm({
                                 name="remarks"
                                 rows={3}
                                 placeholder="Additional remarks..."
-                                defaultValue={state.enteredValues?.remarks ?? ''}
+                                defaultValue={seed('remarks')}
                                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs transition duration-150 ease-in-out placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 leading-relaxed resize-y"
                             />
                             {state.fieldErrors?.remarks && (
@@ -474,7 +569,7 @@ export default function LogForm({
                         disabled={isPending}
                         className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-150 hover:bg-slate-800 hover:shadow active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 cursor-pointer"
                     >
-                        {isPending ? 'Submitting...' : 'Submit Log'}
+                        {isPending ? 'Submitting...' : submitLabel}
                     </button>
                 </div>
             </form>
