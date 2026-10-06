@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionResult, signup } from "@/lib/actions/auth";
+import { ActionResult, createMember } from "@/lib/actions/auth";
 import { useActionToast } from "@/lib/hooks/useActionToast";
 import { memo, useActionState, useEffect, useRef } from "react";
 
@@ -18,7 +18,7 @@ const inputClassName =
     "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60";
 
 function AddMember({ isOpen, onClose, onMemberAdded }: AddMemberProps) {
-    const [state, formAction, isPending] = useActionState(signup, initialState);
+    const [state, formAction, isPending] = useActionState(createMember, initialState);
     const formRef = useRef<HTMLFormElement>(null);
 
     useActionToast(state, "Unable to add member. Please try again.");
@@ -43,7 +43,7 @@ function AddMember({ isOpen, onClose, onMemberAdded }: AddMemberProps) {
         };
     }, [isOpen, onClose]);
 
-    // `signup` returns `message` only on success — reset the form,
+    // `createMember` returns `message` only on success — reset the form,
     // refresh the table, and close shortly after.
     const succeeded = Boolean(state?.message);
     useEffect(() => {
@@ -199,8 +199,10 @@ function AddMember({ isOpen, onClose, onMemberAdded }: AddMemberProps) {
                             required
                         >
                             <option value="">Select a role</option>
+                            {/* Values must match the profiles.role CHECK
+                                constraint ('admin', 'user'). */}
                             <option value="admin">Admin</option>
-                            <option value="member">Member</option>
+                            <option value="user">Member</option>
                         </select>
                         {state.fieldErrors?.role && (
                             <p className="mt-1 text-xs text-red-500">{state.fieldErrors.role[0]}</p>

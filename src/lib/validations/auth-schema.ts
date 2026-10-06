@@ -13,7 +13,7 @@ export const loginSchema = z.object({
         .min(1, { message: 'Password is required' }),
 });
 
-export const signupSchema = z.object({
+export const createMemberSchema = z.object({
     full_name: z
         .string()
         .min(2, { message: 'Full name must be at least 2 characters long' 
@@ -23,8 +23,7 @@ export const signupSchema = z.object({
         .email({ message: 'Email must be a valid email address' 
     }),
     role: z
-        .string()
-        .min(1, { message: 'Role is required' 
+        .enum(['admin', 'user'], { message: 'Role must be either admin or user' 
     }),
     password: z
         .string()

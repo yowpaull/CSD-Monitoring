@@ -3,7 +3,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const LOGIN_PATH = '/'
 const ADMIN_HOME = '/admin/dashboard'
-const USER_HOME = '/user/task'
+// Must match the user area's landing route. There is no /user/task route,
+// so pointing here sent every signed-in non-admin to a 404.
+const USER_HOME = '/user/log'
 
 function isPublicPath(pathname: string) {
     return (
@@ -69,8 +71,10 @@ export async function updateSession(request: NextRequest) {
         .eq('id', user.id)
         .single()
 
-    const metadataRole = (user.user_metadata as { role?: unknown } | null)?.role
-    const role = profile?.role ?? (metadataRole === 'admin' ? 'admin' : 'user')
+    // profiles.role is authoritative. user_metadata.role is writable by the
+    // account holder via updateUserMetadata, so trusting it here would let a
+    // non-admin grant themselves access to /admin.
+    const role = profile?.role ?? 'user'
 
     // Logged-in users don't need the login page — send them home by role.
     if (pathname === LOGIN_PATH) {
