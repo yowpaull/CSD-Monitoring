@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
     useCallback,
     useMemo,
@@ -15,16 +15,20 @@ import {
 import {
     ChevronLeft,
     ChevronRight,
+    Download,
     FilterX,
     RefreshCw,
 } from 'lucide-react';
 
 import {
+    DEFAULT_LOG_PAGE_SIZE,
     LOG_PAGE_SIZES,
     buildLogQueryString,
     formatClockTime,
+    formatLocalMonth,
     formatTimestampParts,
     hasActiveLogFilters,
+    inquiryMonthRange,
     paginationWindow,
     statusBadgeClass,
     totalMinutesBetween,
@@ -82,6 +86,73 @@ export default function InquiryLogsView({
     const formRef = useRef<HTMLFormElement>(null);
 
     const filtersActive = hasActiveLogFilters(filters);
+
+    const searchParams = useSearchParams();
+
+    /*
+     * The export month lives in the URL, not only in component state:
+     * the page remounts this view (via its `key`) whenever the filters
+     * change, and an un-persisted selection would quietly fall back to
+     * the current month and download the wrong rows.
+     *
+     * `null` = never set, so default to the current month. An empty
+     * value = the picker was cleared on purpose, meaning "every month
+     * the filters select".
+     */
+    const monthParam = searchParams.get('export_month');
+
+    const [exportMonth, setExportMonth] = useState(() => {
+        if (monthParam === '') return '';
+        if (monthParam && inquiryMonthRange(monthParam)) return monthParam;
+
+        return formatLocalMonth(new Date());
+    });
+
+    const handleMonthChange = useCallback(
+        (event: ChangeEvent<HTMLInputElement>) => {
+            const next = event.currentTarget.value;
+
+            setExportMonth(next);
+
+            // Shallow history update: Next wires the native
+            // `replaceState` into its router, so `useSearchParams`
+            // stays in sync without a server round trip for what is
+            // only a picker change.
+            const params = new URLSearchParams(searchParams.toString());
+
+            params.set('export_month', next);
+
+            window.history.replaceState(null, '', `?${params.toString()}`);
+        },
+        [searchParams]
+    );
+
+    /*
+     * The export runs server-side over every row the filters select, so
+     * only the filter half of the query string is forwarded — page and
+     * page size are irrelevant to a file. A plain anchor, not a Next
+     * Link: the response is an attachment, so there is no navigation to
+     * intercept.
+     */
+    const exportHref = useMemo(() => {
+        const params = new URLSearchParams(
+            buildLogQueryString(filters, 1, DEFAULT_LOG_PAGE_SIZE)
+        );
+
+        // The month owns the export's inquiry-date window, so it
+        // overwrites any manual Inquiry Date Range: two competing
+        // ranges would quietly produce an empty file.
+        const range = inquiryMonthRange(exportMonth);
+
+        if (range) {
+            params.set('inquiry_from', range.from);
+            params.set('inquiry_to', range.to);
+        }
+
+        const query = params.toString();
+
+        return query ? `${pathname}/export?${query}` : `${pathname}/export`;
+    }, [exportMonth, filters, pathname]);
 
     /*
      * The reference data the edit form needs, narrowed from the filter
@@ -259,6 +330,37 @@ export default function InquiryLogsView({
                         </p>
                     </div>
 
+                    <div className="flex items-end gap-3">
+                        <div>
+                            <label
+                                htmlFor="export_month"
+                                className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-600"
+                            >
+                                Export month
+                            </label>
+
+                            <input
+                                type="month"
+                                id="export_month"
+                                value={exportMonth}
+                                onChange={handleMonthChange}
+                                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                            />
+                        </div>
+
+                        <a
+                            href={exportHref}
+                            aria-disabled={totalCount === 0}
+                            className={`inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 ${
+                                totalCount === 0
+                                    ? 'pointer-events-none opacity-50'
+                                    : ''
+                            }`}
+                        >
+                            <Download size={14} />
+                            Export to Excel
+                        </a>
+                    </div>
                 </div>
 
 

@@ -127,49 +127,34 @@ export async function getInquiryLogFilterOptions(): Promise<InquiryLogFilterOpti
     };
 }
 
-type GetInquiryLogsArgs = {
+type LogQueryClient = Awaited<ReturnType<typeof createClient>>;
+
+type LogQueryContext = {
     scope: InquiryLogScope;
     filters: InquiryLogFilters;
-    page: number;
-    pageSize: number;
+    userId: string;
 };
 
 /**
- * One page of logs, filtered and counted in Postgres.
+ * Scope and filter predicates shared by the paginated list and the
+ * Excel export, so an exported file always matches what the table
+ * shows for the same URL.
  *
- * Only `pageSize` rows are ever materialised, which is what keeps the
- * table usable against a 10k+ row table. Filtering by
- * `representative_id` in `own` scope is backed by RLS as well, so the
- * user cannot widen it from the client.
+ * Filtering by `representative_id` in `own` scope is backed by RLS as
+ * well, so the user cannot widen it from the client. The caller is
+ * responsible for the admin role check.
  */
-export async function getInquiryLogs({
-    scope,
-    filters,
-    page,
-    pageSize,
-}: GetInquiryLogsArgs) {
-    const supabase = await createClient();
-
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) return EMPTY_RESULT;
-
-    // Belt-and-braces with the /admin proxy guard: never return the
-    // full table from this code path unless the caller really is admin.
-    if (scope === 'admin' && (await getUserRole(supabase)) !== 'admin') {
-        return EMPTY_RESULT;
-    }
-
-    const from = (page - 1) * pageSize;
-
+function buildLogQuery(
+    supabase: LogQueryClient,
+    { scope, filters, userId }: LogQueryContext,
+    count: boolean
+) {
     let query = supabase
         .from('log_inquiries')
-        .select(LOG_SELECT, { count: 'exact' });
+        .select(LOG_SELECT, count ? { count: 'exact' } : {});
 
     if (scope === 'own') {
-        query = query.eq('representative_id', user.id);
+        query = query.eq('representative_id', userId);
     }
 
     if (filters.brand_id) {
@@ -226,6 +211,50 @@ export async function getInquiryLogs({
         if (end) query = query.lt('inquiry_datetime', end);
     }
 
+    return query;
+}
+
+type GetInquiryLogsArgs = {
+    scope: InquiryLogScope;
+    filters: InquiryLogFilters;
+    page: number;
+    pageSize: number;
+};
+
+/**
+ * One page of logs, filtered and counted in Postgres.
+ *
+ * Only `pageSize` rows are ever materialised, which is what keeps the
+ * table usable against a 10k+ row table.
+ */
+export async function getInquiryLogs({
+    scope,
+    filters,
+    page,
+    pageSize,
+}: GetInquiryLogsArgs) {
+    const supabase = await createClient();
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return EMPTY_RESULT;
+
+    // Belt-and-braces with the /admin proxy guard: never return the
+    // full table from this code path unless the caller really is admin.
+    if (scope === 'admin' && (await getUserRole(supabase)) !== 'admin') {
+        return EMPTY_RESULT;
+    }
+
+    const from = (page - 1) * pageSize;
+
+    const query = buildLogQuery(
+        supabase,
+        { scope, filters, userId: user.id },
+        true
+    );
+
     // `id` is a stable tiebreaker so rows never shuffle between pages
     // when several logs share a `created_at` value.
     const { data, count, error } = await query
@@ -273,4 +302,89 @@ export async function getInquiryLogs({
         totalPages,
         page: Math.min(page, totalPages),
     };
+}
+
+/** Rows fetched per request while building an export. */
+const EXPORT_BATCH_SIZE = 1000;
+
+/**
+ * Hard ceiling on a single export. The table is small today, but a
+ * runaway filter must not be able to stream an unbounded workbook into
+ * memory; anything past the cap is reported back to the caller.
+ */
+export const EXPORT_ROW_LIMIT = 10000;
+
+export type InquiryLogExportResult =
+    | { ok: true; rows: InquiryLogRow[]; truncated: boolean }
+    | { ok: false; reason: 'unauthorized' | 'failed' };
+
+/**
+ * Every row matching `filters`, in the same order as the table.
+ *
+ * The result set is pulled in batches instead of one unbounded request,
+ * so a large export cannot trip Postgres statement timeouts. The list
+ * query's `pageSize` deliberately does not apply here: an export means
+ * "everything the filters select", not "what is on screen".
+ */
+export async function getInquiryLogsForExport({
+    scope,
+    filters,
+}: {
+    scope: InquiryLogScope;
+    filters: InquiryLogFilters;
+}): Promise<InquiryLogExportResult> {
+    const supabase = await createClient();
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return { ok: false, reason: 'unauthorized' };
+
+    // Belt-and-braces with the /admin proxy guard, same as the list.
+    if (scope === 'admin' && (await getUserRole(supabase)) !== 'admin') {
+        return { ok: false, reason: 'unauthorized' };
+    }
+
+    const query = buildLogQuery(
+        supabase,
+        { scope, filters, userId: user.id },
+        false
+    );
+
+    const rows: InquiryLogRow[] = [];
+
+    for (let from = 0; ; from += EXPORT_BATCH_SIZE) {
+        // `.range()` mutates the one builder, so the ordering has to be
+        // restated on every batch; `id` keeps ties stable across the
+        // batch boundary for the same reason it does across pages.
+        const { data, error } = await query
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false })
+            .range(from, from + EXPORT_BATCH_SIZE - 1);
+
+        if (error) {
+            console.error('Failed to export inquiry logs:', error);
+            return { ok: false, reason: 'failed' };
+        }
+
+        const batch = (data ?? []) as unknown as InquiryLogRow[];
+
+        rows.push(...batch);
+
+        // Checked before the short-batch exit so a result set that ends
+        // exactly on the cap is not reported as truncated: only a batch
+        // that pushes past the limit proves rows were left behind.
+        if (rows.length > EXPORT_ROW_LIMIT) {
+            return {
+                ok: true,
+                rows: rows.slice(0, EXPORT_ROW_LIMIT),
+                truncated: true,
+            };
+        }
+
+        if (batch.length < EXPORT_BATCH_SIZE) {
+            return { ok: true, rows, truncated: false };
+        }
+    }
 }

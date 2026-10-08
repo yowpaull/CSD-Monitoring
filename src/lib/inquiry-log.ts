@@ -140,12 +140,48 @@ export function localDayAfterIso(date: string): string | null {
 }
 
 /** `yyyy-mm-dd` from a Date's *local* parts, never via toISOString. */
-function formatLocalDay(value: Date): string {
+export function formatLocalDay(value: Date): string {
     const year = value.getFullYear();
     const month = String(value.getMonth() + 1).padStart(2, '0');
     const day = String(value.getDate()).padStart(2, '0');
 
     return `${year}-${month}-${day}`;
+}
+
+/** `yyyy-mm` from a Date's *local* parts, never via toISOString. */
+export function formatLocalMonth(value: Date): string {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+
+    return `${year}-${month}`;
+}
+
+const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/**
+ * Inclusive first and last day (`yyyy-mm-dd`) of a `yyyy-mm` month —
+ * exactly the pair of bounds the inquiry-date filters already accept,
+ * so a monthly export needs no new query logic.
+ *
+ * Returns null for anything that is not a real month. Day 0 of the
+ * following month is the last day of this one, which lets `Date`
+ * answer the leap-year question (2028-02 → 29) without a lookup table.
+ */
+export function inquiryMonthRange(month: string): {
+    from: string;
+    to: string;
+} | null {
+    if (!MONTH_PATTERN.test(month)) return null;
+
+    const year = Number(month.slice(0, 4));
+    const monthIndex = Number(month.slice(5, 7));
+
+    const lastDay = new Date(Date.UTC(year, monthIndex, 0)).getUTCDate();
+
+    return {
+        from: `${month}-01`,
+        to: `${month}-${String(lastDay).padStart(2, '0')}`,
+    };
 }
 
 /**
