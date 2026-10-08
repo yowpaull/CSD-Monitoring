@@ -1,0 +1,106 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+# One run per ref at a time — a newer push cancels the stale run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Lint, typecheck, build
+    runs-on: ubuntu-latest
+    env:
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_USER_EMAIL: ${{ secrets.E2E_USER_EMAIL }}
+      E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # `.env` is gitignored, so the Supabase vars arrive as repository
+      # secrets when they exist; the placeholders keep the build green
+      # before they are configured.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci-placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'ci-placeholder-key' }}
+
+      - name: Run Playwright end-to-end tests
+        if: env.E2E_ADMIN_EMAIL != ''
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://ci-placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'ci-placeholder-key' }}
+
+      - name: Skip end-to-end tests when credentials are missing
+        if: env.E2E_ADMIN_EMAIL == ''
+        run: echo "::warning::E2E_ADMIN_EMAIL / E2E_ADMIN_PASSWORD secrets are not set - skipping Playwright tests."
+
+  deploy:
+    name: Deploy to Vercel
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # The workflow is usable before the Vercel hookup exists: with no
+      # token it passes with a warning instead of failing every push.
+      - name: Warn when deploy secrets are missing
+        if: env.VERCEL_TOKEN == ''
+        run: echo "::warning::VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID are not set - skipping deployment."
+
+      - name: Install Vercel CLI
+        if: env.VERCEL_TOKEN != ''
+        run: npm install --global vercel@latest
+
+      # Pulls the project's environment (Supabase vars live in the
+      # Vercel dashboard) so `vercel build` sees the same values the
+      # hosted app will.
+      - name: Pull Vercel environment
+        if: env.VERCEL_TOKEN != ''
+        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+
+      - name: Build project artifacts
+        if: env.VERCEL_TOKEN != ''
+        run: vercel build --token=$VERCEL_TOKEN
+
+      - name: Deploy to production
+        if: env.VERCEL_TOKEN != ''
+        run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN

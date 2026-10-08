@@ -60,6 +60,12 @@ function hasData(data: DashboardCount[]): boolean {
     return data.some((entry) => entry.value > 0);
 }
 
+function chartAltText(prefix: string, data: DashboardCount[]): string {
+    return `${prefix}: ${data
+        .map((entry) => `${entry.label} ${entry.value}`)
+        .join(', ')}`;
+}
+
 /** A doughnut of zeroes would render as an empty circle; say so instead. */
 function EmptyChart() {
     return (
@@ -73,7 +79,11 @@ export function StatusDoughnut({ data }: { data: DashboardCount[] }) {
     if (!hasData(data)) return <EmptyChart />;
 
     return (
-        <div className="h-64">
+        <div
+            className="h-64"
+            role="img"
+            aria-label={chartAltText('Status distribution', data)}
+        >
             <Doughnut
                 data={{
                     labels: data.map((entry) => entry.label),
@@ -118,7 +128,11 @@ export function StatusDoughnut({ data }: { data: DashboardCount[] }) {
 
 export function WeeklyTrendLine({ data }: { data: DashboardCount[] }) {
     return (
-        <div className="h-72">
+        <div
+            className="h-72"
+            role="img"
+            aria-label={chartAltText('Inquiries per week', data)}
+        >
             <Line
                 data={{
                     labels: data.map((entry) => entry.label),
@@ -190,7 +204,11 @@ export function CountBarChart({
     const height = Math.max(288, data.length * 26 + 48);
 
     return (
-        <div style={{ height }}>
+        <div
+            style={{ height }}
+            role="img"
+            aria-label={chartAltText('Inquiry counts', data)}
+        >
             <Bar
                 data={{
                     labels: data.map((entry) => entry.label),
