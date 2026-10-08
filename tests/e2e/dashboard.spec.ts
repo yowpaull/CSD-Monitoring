@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import {
+    BASE_URL,
     adminCreds,
     login,
     requireAdmin,
@@ -16,7 +17,7 @@ test.describe('Admin dashboard', () => {
     }) => {
         await login(page, adminCreds, '/admin/dashboard');
         await expect(
-            page.getByRole('heading', { name: 'Dashboard' })
+            page.getByRole('heading', { name: 'Dashboard', exact: true })
         ).toBeVisible();
 
         const totalCard = page
@@ -139,7 +140,7 @@ test.describe('Dashboard access', () => {
     test('redirects members to their own home', async ({ page }) => {
         await login(page, userCreds, '/user/log');
         await page.goto('/admin/dashboard');
-        await expect(page).toHaveURL('**/user/log');
+        await expect(page).toHaveURL(`${BASE_URL}/user/log`);
         await expect(
             page.getByRole('heading', { name: 'Log Customer Inquiry' })
         ).toBeVisible();

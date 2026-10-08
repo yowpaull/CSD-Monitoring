@@ -53,10 +53,9 @@ test.describe('Team management', () => {
         const dialog = modal(page, 'Add New Member');
         await expect(dialog).toBeVisible();
 
+        const email = `e2e-validation-${uniqueId()}@example.com`;
         await dialog.getByLabel('Full Name').fill('E2E Validation');
-        await dialog
-            .getByLabel('Email')
-            .fill(`e2e-validation-${uniqueId()}@example.com`);
+        await dialog.getByLabel('Email').fill(email);
         await dialog.getByLabel('Password', { exact: true }).fill('abc');
         await dialog.getByLabel('Confirm Password').fill('abc');
         await dialog.getByLabel('Role').selectOption({ label: 'Member' });
@@ -67,8 +66,11 @@ test.describe('Team management', () => {
             'Password must be at least 8 characters long'
         );
 
+        await dialog.getByLabel('Full Name').fill('E2E Validation');
+        await dialog.getByLabel('Email').fill(email);
         await dialog.getByLabel('Password', { exact: true }).fill('E2eMember123');
         await dialog.getByLabel('Confirm Password').fill('Different123');
+        await dialog.getByLabel('Role').selectOption({ label: 'Member' });
         await dialog.getByRole('button', { name: 'Add Member' }).click();
         await expectToast(page, 'Passwords do not match');
 

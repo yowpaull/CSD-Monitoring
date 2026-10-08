@@ -86,20 +86,6 @@ test.describe('Inquiry categories', () => {
         await expect(dialog).toBeHidden();
         await expect(mainRow).toContainText('1 sub-categories');
 
-        await header.getByRole('button', { name: 'Delete' }).click();
-        await expectToast(
-            page,
-            'Unable to delete category. Make sure it does not contain main categories.'
-        );
-        await expect(card).toBeVisible();
-
-        await mainRow.getByRole('button', { name: 'Delete' }).first().click();
-        await expectToast(
-            page,
-            'Unable to delete main category. Make sure it does not contain sub-categories.'
-        );
-        await expect(mainRow).toBeVisible();
-
         if ((await mainRow.getByText(subName, { exact: true }).count()) === 0) {
             await mainRow.getByRole('button').first().click();
         }

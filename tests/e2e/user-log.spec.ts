@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import {
+    BASE_URL,
     expectToast,
     localDateTimeNow,
     login,
@@ -20,6 +21,7 @@ async function fillRequiredLogFields(page: import('@playwright/test').Page) {
         .locator('[name=inquiry_sub_category_id]')
         .selectOption({ index: 1 });
     await page.locator('[name=customer_name]').fill('E2E Customer');
+    await page.locator('[name=thread_number]').fill('100');
     await page.locator('[name=status]').selectOption({ label: 'Open' });
 }
 
@@ -58,7 +60,7 @@ test.describe('Logging an inquiry', () => {
 
         await page.getByRole('button', { name: 'Submit Log' }).click();
         await expect(toasts(page)).toHaveCount(0);
-        await expect(page).toHaveURL('**/user/log');
+        await expect(page).toHaveURL(`${BASE_URL}/user/log`);
 
         await requireSelectOptions(page, 'platform_id');
         await requireSelectOptions(page, 'brand_id');
@@ -73,7 +75,7 @@ test.describe('Logging an inquiry', () => {
             page,
             'End time cannot be earlier than start time.'
         );
-        await expect(page).toHaveURL('**/user/log');
+        await expect(page).toHaveURL(`${BASE_URL}/user/log`);
     });
 
     test('creates a log, then edits and deletes it', async ({ page }) => {

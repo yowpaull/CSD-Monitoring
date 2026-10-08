@@ -102,7 +102,7 @@ test.describe('Route protection', () => {
         );
         await login(page, adminCreds, '/admin/dashboard');
         await expect(
-            page.getByRole('heading', { name: 'Dashboard' })
+            page.getByRole('heading', { name: 'Dashboard', exact: true })
         ).toBeVisible();
     });
 

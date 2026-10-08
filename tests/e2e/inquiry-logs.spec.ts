@@ -171,7 +171,9 @@ test.describe('Inquiry logs', () => {
         await expect(viewModal).toBeVisible();
         await expect(viewModal).toContainText('General Information');
         await expect(viewModal).toContainText('Record Information');
-        await viewModal.getByRole('button', { name: 'Close' }).click();
+        await viewModal
+            .getByRole('button', { name: 'Close', exact: true })
+            .click();
         await expect(viewModal).toBeHidden();
 
         await firstRow.getByRole('button', { name: 'Edit' }).click();
