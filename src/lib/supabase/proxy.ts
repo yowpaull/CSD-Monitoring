@@ -67,9 +67,19 @@ export async function updateSession(request: NextRequest) {
     // RLS lets every user read their own profile row.
     const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, is_active')
         .eq('id', user.id)
         .single()
+
+    // Deactivated members keep their profiles row (inquiry logs
+    // reference it) but lose access: end the live session here while the
+    // login action blocks fresh sign-ins with an explanation.
+    if (profile?.is_active === false) {
+        await supabase.auth.signOut()
+        const url = request.nextUrl.clone()
+        url.pathname = LOGIN_PATH
+        return NextResponse.redirect(url)
+    }
 
     // profiles.role is authoritative. user_metadata.role is writable by the
     // account holder via updateUserMetadata, so trusting it here would let a

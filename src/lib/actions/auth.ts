@@ -1,7 +1,12 @@
 'use server'
 
 import { createClient, createEphemeralClient } from '@/lib/supabase/server';
-import { loginSchema, createMemberSchema } from '@/lib/validations/auth-schema';
+import {
+    changePasswordSchema,
+    createMemberSchema,
+    loginSchema,
+    updateProfileSchema,
+} from '@/lib/validations/auth-schema';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 
@@ -61,7 +66,7 @@ export async function login(_prevState: ActionResult | null, formData: FormData)
     }
 
     const supabase = await createClient();
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
         email: parsed.data.email,
         password: parsed.data.password,
     });
@@ -69,6 +74,24 @@ export async function login(_prevState: ActionResult | null, formData: FormData)
     if (error) {
         return { 
             error: 'Invalid Email or Password! Please try again.',
+            enteredValues: { email },
+        };
+    }
+
+    // Deactivated accounts are refused right after authentication: the
+    // proxy signs out live sessions too, but without this check the
+    // redirect below would bounce straight back to the login page with
+    // no explanation.
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_active')
+        .eq('id', data.user.id)
+        .single();
+
+    if (profile && profile.is_active === false) {
+        await supabase.auth.signOut();
+        return {
+            error: 'This account has been deactivated. Please contact your administrator.',
             enteredValues: { email },
         };
     }
@@ -183,6 +206,235 @@ export async function createMember(_prevState: ActionResult | null,formData: For
     return {
         message: 'Account created successfully!',
     };
+}
+
+/**
+ * Admin-only: renames a team member. Only the name moves through the
+ * form — role, email and status are untouched by this action — and the
+ * row update itself is re-gated on is_admin() inside the RPC, because
+ * RLS only ever permits self-updates on profiles.
+ */
+export async function updateMemberFullName(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+    const full_name = String(formData.get('full_name') ?? '').trim();
+    const member_id = String(formData.get('member_id') ?? '').trim();
+
+    // The same rule as editing your own name: one validation story.
+    const parsed = updateProfileSchema.safeParse({ full_name });
+
+    if (!parsed.success) {
+        return {
+            fieldErrors: parsed.error.flatten().fieldErrors,
+            enteredValues: { full_name },
+        };
+    }
+
+    if (!member_id) {
+        return { error: 'Missing member id.' };
+    }
+
+    const supabase = await createClient();
+    const callerRole = await getUserRole(supabase);
+
+    if (callerRole !== 'admin') {
+        return { error: 'You do not have permission to edit members.' };
+    }
+
+    const { error } = await supabase.rpc('set_profile_full_name', {
+        target_id: member_id,
+        new_full_name: parsed.data.full_name,
+    });
+
+    if (error) {
+        console.error('Failed to update member name:', error);
+        return {
+            error: 'The member name could not be updated. Please try again.',
+            enteredValues: { full_name },
+        };
+    }
+
+    return { message: 'Member name updated successfully!' };
+}
+
+/**
+ * Admin-only: flips a member between active and deactivated. The target
+ * state is posted explicitly (never "whatever the button clicked"), so
+ * replaying a payload can only produce that state. Deactivation is the
+ * substitute for deletion — the row stays because inquiry logs
+ * reference it — and an admin cannot deactivate themselves, here and
+ * again inside the RPC, or nobody could reactivate the team.
+ */
+export async function setMemberActive(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+    const member_id = String(formData.get('member_id') ?? '').trim();
+    const rawActive = String(formData.get('active') ?? '');
+
+    if (!member_id) {
+        return { error: 'Missing member id.' };
+    }
+
+    // Anything other than an explicit 'true'/'false' is a malformed
+    // payload; defaulting missing values would risk deactivating on a
+    // lost field.
+    if (rawActive !== 'true' && rawActive !== 'false') {
+        return { error: 'Missing activation state.' };
+    }
+
+    const active = rawActive === 'true';
+
+    const supabase = await createClient();
+    const callerRole = await getUserRole(supabase);
+
+    if (callerRole !== 'admin') {
+        return { error: 'You do not have permission to manage members.' };
+    }
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!active && user && member_id === user.id) {
+        return { error: 'You cannot deactivate your own account.' };
+    }
+
+    const { error } = await supabase.rpc('set_profile_active', {
+        target_id: member_id,
+        new_active: active,
+    });
+
+    if (error) {
+        console.error('Failed to change member status:', error);
+
+        // Surface the RPC's own guard if the action-level one missed it.
+        if (error.message.toLowerCase().includes('deactivate your own')) {
+            return { error: 'You cannot deactivate your own account.' };
+        }
+
+        return {
+            error: 'The member status could not be changed. Please try again.',
+        };
+    }
+
+    return {
+        message: active
+            ? 'Member activated successfully!'
+            : 'Member deactivated successfully!',
+    };
+}
+
+export async function updateProfile(_prevState: ActionResult | null,formData: FormData): Promise<ActionResult> {
+    const full_name = String(formData.get('full_name') ?? '').trim();
+
+    const parsed = updateProfileSchema.safeParse({ full_name });
+
+    if (!parsed.success) {
+        return {
+            fieldErrors: parsed.error.flatten().fieldErrors,
+            enteredValues: { full_name },
+        };
+    }
+
+    const supabase = await createClient();
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    // Server actions are public endpoints: the row to update comes from
+    // the caller's own session, never from the form, so nobody can edit
+    // someone else's profile by tampering with the payload.
+    if (!user) {
+        return { error: 'Your session has expired. Please sign in again.' };
+    }
+
+    // RLS ("Users can update own profile") allows exactly this row and
+    // blocks a role change in the same statement, so the UPDATE cannot
+    // be used to self-promote.
+    const { error } = await supabase
+        .from('profiles')
+        .update({ full_name: parsed.data.full_name })
+        .eq('id', user.id);
+
+    if (error) {
+        console.error('Failed to update profile:', error);
+        return {
+            error: 'Your profile could not be updated. Please try again.',
+            enteredValues: { full_name },
+        };
+    }
+
+    // The profile pages read this row on the server, so both routes are
+    // refreshed — whichever one is open picks up the new name.
+    revalidatePath('/user/profile');
+    revalidatePath('/admin/profile');
+
+    return { message: 'Profile updated successfully!' };
+}
+
+export async function changePassword(_prevState: ActionResult | null,formData: FormData): Promise<ActionResult> {
+    const raw = {
+        current_password: formData.get('current_password'),
+        password: formData.get('password'),
+        confirm_password: formData.get('confirm_password'),
+    };
+
+    const parsed = changePasswordSchema.safeParse(raw);
+
+    if (!parsed.success) {
+        return {
+            fieldErrors: parsed.error.flatten().fieldErrors,
+        };
+    }
+
+    const supabase = await createClient();
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user?.email) {
+        return { error: 'Your session has expired. Please sign in again.' };
+    }
+
+    // `updateUser` has no current-password parameter, so the existing
+    // password is verified here first: a stolen session must still know
+    // the password to change it. This also rotates the session tokens,
+    // which is harmless — it is the same account, freshly authenticated.
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: parsed.data.current_password,
+    });
+
+    if (verifyError) {
+        return {
+            fieldErrors: {
+                current_password: ['Current password is incorrect.'],
+            },
+        };
+    }
+
+    const { error } = await supabase.auth.updateUser({
+        password: parsed.data.password,
+    });
+
+    if (error) {
+        console.error('Failed to change password:', error);
+
+        // GoTrue's own "must be different" complaint lands here; the
+        // strength rules are already enforced by the schema above.
+        if (
+            error.message.toLowerCase().includes('different') ||
+            error.message.toLowerCase().includes('same')
+        ) {
+            return {
+                fieldErrors: {
+                    password: [
+                        'New password must be different from your current password.',
+                    ],
+                },
+            };
+        }
+
+        return { error: error.message };
+    }
+
+    return { message: 'Password changed successfully!' };
 }
 
 export async function logout() {
