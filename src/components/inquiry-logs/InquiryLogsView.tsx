@@ -319,7 +319,7 @@ export default function InquiryLogsView({
 
                 {/* HEADER */}
 
-                <div className="mb-6 flex items-center justify-between gap-4">
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">
                             {title}
@@ -330,7 +330,7 @@ export default function InquiryLogsView({
                         </p>
                     </div>
 
-                    <div className="flex items-end gap-3">
+                    <div className="flex flex-wrap items-end gap-3">
                         <div>
                             <label
                                 htmlFor="export_month"
@@ -351,7 +351,7 @@ export default function InquiryLogsView({
                         <a
                             href={exportHref}
                             aria-disabled={totalCount === 0}
-                            className={`inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 ${
+                            className={`inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 ${
                                 totalCount === 0
                                     ? 'pointer-events-none opacity-50'
                                     : ''

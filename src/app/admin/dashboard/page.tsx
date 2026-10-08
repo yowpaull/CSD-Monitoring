@@ -138,7 +138,7 @@ export default async function Dashboard({
                 </div>
 
                 {/* KPI row */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <StatCard
                         icon={<Inbox className="h-6 w-6" />}
                         label="Total Inquiries"
@@ -181,7 +181,7 @@ export default async function Dashboard({
                 </div>
 
                 {/* Charts: dimensions */}
-                <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
                     <ChartCard
                         title="By Platform"
                         subtitle="Every platform"
@@ -215,7 +215,7 @@ export default async function Dashboard({
 
                 {/* Recent logs */}
                 <section className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
                         <div>
                             <h2 className="text-base font-semibold text-slate-900">
                                 Recent Inquiries

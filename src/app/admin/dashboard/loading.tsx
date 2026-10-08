@@ -12,7 +12,7 @@ export default function Loading() {
                     <Skeleton className="h-10 w-48" />
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {Array.from({ length: 3 }).map((_, index) => (
                         <SkeletonCard key={index}>
                             <div className="flex items-center gap-4">
@@ -38,7 +38,7 @@ export default function Loading() {
                     </SkeletonCard>
                 </div>
 
-                <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
                     {Array.from({ length: 3 }).map((_, index) => (
                         <SkeletonCard key={index}>
                             <Skeleton className="mb-4 h-5 w-28" />
@@ -48,7 +48,7 @@ export default function Loading() {
                 </div>
 
                 <SkeletonCard className="mt-6">
-                    <div className="mb-4 flex items-center justify-between">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                         <div className="space-y-2">
                             <Skeleton className="h-5 w-40" />
                             <Skeleton className="h-3 w-64" />

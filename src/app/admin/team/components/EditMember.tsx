@@ -80,11 +80,11 @@ function EditMember({ member, isOpen, onClose, onMemberUpdated }: EditMemberProp
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4"
+            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 px-4 py-6"
             onClick={onClose}
         >
             <div
-                className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+                className="my-auto w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"

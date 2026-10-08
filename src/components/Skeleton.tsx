@@ -49,7 +49,7 @@ function SkeletonTableHeader() {
 export function CatalogSkeleton() {
     return (
         <div className="p-6">
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-2">
                     <Skeleton className="h-7 w-40" />
                     <Skeleton className="h-4 w-72" />
@@ -82,7 +82,7 @@ export function CatalogSkeleton() {
 export function LogsListSkeleton() {
     return (
         <div className="p-6">
-            <div className="mb-6 flex items-center justify-between gap-4">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-2">
                     <Skeleton className="h-7 w-56" />
                     <Skeleton className="h-4 w-80" />
@@ -196,7 +196,7 @@ export function TeamSkeleton() {
             aria-label="Loading team"
             className="mx-auto max-w-6xl"
         >
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-2">
                     <Skeleton className="h-7 w-36" />
                     <Skeleton className="h-4 w-56" />
