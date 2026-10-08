@@ -1,7 +1,12 @@
 'use server'
 
 import { createClient, createEphemeralClient } from '@/lib/supabase/server';
-import { loginSchema, createMemberSchema } from '@/lib/validations/auth-schema';
+import {
+    changePasswordSchema,
+    createMemberSchema,
+    loginSchema,
+    updateProfileSchema,
+} from '@/lib/validations/auth-schema';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 
@@ -183,6 +188,123 @@ export async function createMember(_prevState: ActionResult | null,formData: For
     return {
         message: 'Account created successfully!',
     };
+}
+
+export async function updateProfile(_prevState: ActionResult | null,formData: FormData): Promise<ActionResult> {
+    const full_name = String(formData.get('full_name') ?? '').trim();
+
+    const parsed = updateProfileSchema.safeParse({ full_name });
+
+    if (!parsed.success) {
+        return {
+            fieldErrors: parsed.error.flatten().fieldErrors,
+            enteredValues: { full_name },
+        };
+    }
+
+    const supabase = await createClient();
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    // Server actions are public endpoints: the row to update comes from
+    // the caller's own session, never from the form, so nobody can edit
+    // someone else's profile by tampering with the payload.
+    if (!user) {
+        return { error: 'Your session has expired. Please sign in again.' };
+    }
+
+    // RLS ("Users can update own profile") allows exactly this row and
+    // blocks a role change in the same statement, so the UPDATE cannot
+    // be used to self-promote.
+    const { error } = await supabase
+        .from('profiles')
+        .update({ full_name: parsed.data.full_name })
+        .eq('id', user.id);
+
+    if (error) {
+        console.error('Failed to update profile:', error);
+        return {
+            error: 'Your profile could not be updated. Please try again.',
+            enteredValues: { full_name },
+        };
+    }
+
+    // The profile pages read this row on the server, so both routes are
+    // refreshed — whichever one is open picks up the new name.
+    revalidatePath('/user/profile');
+    revalidatePath('/admin/profile');
+
+    return { message: 'Profile updated successfully!' };
+}
+
+export async function changePassword(_prevState: ActionResult | null,formData: FormData): Promise<ActionResult> {
+    const raw = {
+        current_password: formData.get('current_password'),
+        password: formData.get('password'),
+        confirm_password: formData.get('confirm_password'),
+    };
+
+    const parsed = changePasswordSchema.safeParse(raw);
+
+    if (!parsed.success) {
+        return {
+            fieldErrors: parsed.error.flatten().fieldErrors,
+        };
+    }
+
+    const supabase = await createClient();
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user?.email) {
+        return { error: 'Your session has expired. Please sign in again.' };
+    }
+
+    // `updateUser` has no current-password parameter, so the existing
+    // password is verified here first: a stolen session must still know
+    // the password to change it. This also rotates the session tokens,
+    // which is harmless — it is the same account, freshly authenticated.
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: parsed.data.current_password,
+    });
+
+    if (verifyError) {
+        return {
+            fieldErrors: {
+                current_password: ['Current password is incorrect.'],
+            },
+        };
+    }
+
+    const { error } = await supabase.auth.updateUser({
+        password: parsed.data.password,
+    });
+
+    if (error) {
+        console.error('Failed to change password:', error);
+
+        // GoTrue's own "must be different" complaint lands here; the
+        // strength rules are already enforced by the schema above.
+        if (
+            error.message.toLowerCase().includes('different') ||
+            error.message.toLowerCase().includes('same')
+        ) {
+            return {
+                fieldErrors: {
+                    password: [
+                        'New password must be different from your current password.',
+                    ],
+                },
+            };
+        }
+
+        return { error: error.message };
+    }
+
+    return { message: 'Password changed successfully!' };
 }
 
 export async function logout() {

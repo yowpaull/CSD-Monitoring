@@ -1,5 +1,6 @@
 'use client';
 
+import PasswordInput from "@/components/PasswordInput";
 import { ActionResult, createMember } from "@/lib/actions/auth";
 import { useActionToast } from "@/lib/hooks/useActionToast";
 import { memo, useActionState, useEffect, useRef } from "react";
@@ -152,8 +153,7 @@ function AddMember({ isOpen, onClose, onMemberAdded }: AddMemberProps) {
                         <label htmlFor="password" className="mb-2 block text-sm font-medium text-slate-700">
                             Password
                         </label>
-                        <input
-                            type="password"
+                        <PasswordInput
                             id="password"
                             name="password"
                             placeholder="••••••••"
@@ -171,8 +171,7 @@ function AddMember({ isOpen, onClose, onMemberAdded }: AddMemberProps) {
                         <label htmlFor="confirm_password" className="mb-2 block text-sm font-medium text-slate-700">
                             Confirm Password
                         </label>
-                        <input
-                            type="password"
+                        <PasswordInput
                             id="confirm_password"
                             name="confirm_password"
                             placeholder="••••••••"

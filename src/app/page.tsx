@@ -1,5 +1,6 @@
 'use client';
 
+import PasswordInput from "@/components/PasswordInput";
 import { ActionResult, login } from "@/lib/actions/auth";
 import { useActionToast } from "@/lib/hooks/useActionToast";
 import { useActionState } from "react";
@@ -50,8 +51,7 @@ export default function Home() {
             
             <div className="flex flex-col gap-2 w-full">
               <label htmlFor="password">Password</label>
-              <input 
-                type="password" 
+              <PasswordInput 
                 name="password" 
                 id="password" 
                 required
