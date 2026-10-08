@@ -66,7 +66,7 @@ export async function login(_prevState: ActionResult | null, formData: FormData)
     }
 
     const supabase = await createClient();
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
         email: parsed.data.email,
         password: parsed.data.password,
     });
@@ -74,6 +74,24 @@ export async function login(_prevState: ActionResult | null, formData: FormData)
     if (error) {
         return { 
             error: 'Invalid Email or Password! Please try again.',
+            enteredValues: { email },
+        };
+    }
+
+    // Deactivated accounts are refused right after authentication: the
+    // proxy signs out live sessions too, but without this check the
+    // redirect below would bounce straight back to the login page with
+    // no explanation.
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_active')
+        .eq('id', data.user.id)
+        .single();
+
+    if (profile && profile.is_active === false) {
+        await supabase.auth.signOut();
+        return {
+            error: 'This account has been deactivated. Please contact your administrator.',
             enteredValues: { email },
         };
     }
@@ -187,6 +205,118 @@ export async function createMember(_prevState: ActionResult | null,formData: For
 
     return {
         message: 'Account created successfully!',
+    };
+}
+
+/**
+ * Admin-only: renames a team member. Only the name moves through the
+ * form — role, email and status are untouched by this action — and the
+ * row update itself is re-gated on is_admin() inside the RPC, because
+ * RLS only ever permits self-updates on profiles.
+ */
+export async function updateMemberFullName(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+    const full_name = String(formData.get('full_name') ?? '').trim();
+    const member_id = String(formData.get('member_id') ?? '').trim();
+
+    // The same rule as editing your own name: one validation story.
+    const parsed = updateProfileSchema.safeParse({ full_name });
+
+    if (!parsed.success) {
+        return {
+            fieldErrors: parsed.error.flatten().fieldErrors,
+            enteredValues: { full_name },
+        };
+    }
+
+    if (!member_id) {
+        return { error: 'Missing member id.' };
+    }
+
+    const supabase = await createClient();
+    const callerRole = await getUserRole(supabase);
+
+    if (callerRole !== 'admin') {
+        return { error: 'You do not have permission to edit members.' };
+    }
+
+    const { error } = await supabase.rpc('set_profile_full_name', {
+        target_id: member_id,
+        new_full_name: parsed.data.full_name,
+    });
+
+    if (error) {
+        console.error('Failed to update member name:', error);
+        return {
+            error: 'The member name could not be updated. Please try again.',
+            enteredValues: { full_name },
+        };
+    }
+
+    return { message: 'Member name updated successfully!' };
+}
+
+/**
+ * Admin-only: flips a member between active and deactivated. The target
+ * state is posted explicitly (never "whatever the button clicked"), so
+ * replaying a payload can only produce that state. Deactivation is the
+ * substitute for deletion — the row stays because inquiry logs
+ * reference it — and an admin cannot deactivate themselves, here and
+ * again inside the RPC, or nobody could reactivate the team.
+ */
+export async function setMemberActive(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+    const member_id = String(formData.get('member_id') ?? '').trim();
+    const rawActive = String(formData.get('active') ?? '');
+
+    if (!member_id) {
+        return { error: 'Missing member id.' };
+    }
+
+    // Anything other than an explicit 'true'/'false' is a malformed
+    // payload; defaulting missing values would risk deactivating on a
+    // lost field.
+    if (rawActive !== 'true' && rawActive !== 'false') {
+        return { error: 'Missing activation state.' };
+    }
+
+    const active = rawActive === 'true';
+
+    const supabase = await createClient();
+    const callerRole = await getUserRole(supabase);
+
+    if (callerRole !== 'admin') {
+        return { error: 'You do not have permission to manage members.' };
+    }
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!active && user && member_id === user.id) {
+        return { error: 'You cannot deactivate your own account.' };
+    }
+
+    const { error } = await supabase.rpc('set_profile_active', {
+        target_id: member_id,
+        new_active: active,
+    });
+
+    if (error) {
+        console.error('Failed to change member status:', error);
+
+        // Surface the RPC's own guard if the action-level one missed it.
+        if (error.message.toLowerCase().includes('deactivate your own')) {
+            return { error: 'You cannot deactivate your own account.' };
+        }
+
+        return {
+            error: 'The member status could not be changed. Please try again.',
+        };
+    }
+
+    return {
+        message: active
+            ? 'Member activated successfully!'
+            : 'Member deactivated successfully!',
     };
 }
 

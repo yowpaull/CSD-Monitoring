@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AddMember from "./components/AddMember";
+import MemberActions from "./components/MemberActions";
 import { createClient } from "@/lib/supabase/client";
 
 interface Profile {
@@ -10,6 +11,7 @@ interface Profile {
     email: string | null;
     role: string | null;
     created_at: string;
+    is_active: boolean;
 }
 
 export default function Team() {
@@ -17,6 +19,9 @@ export default function Team() {
     const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
     const [members, setMembers] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
+    // The admin's own id, used to keep the Deactivate button disabled on
+    // their row — nobody should be able to lock themselves out.
+    const [selfId, setSelfId] = useState<string | null>(null);
     // Bumped every time a member is added so the table re-fetches
     // and always shows every member in the database.
     const [membersVersion, setMembersVersion] = useState(0);
@@ -33,10 +38,17 @@ export default function Team() {
                 // all members transfers less data and resolves faster.
                 const { data, error } = await supabase
                     .from('profiles')
-                    .select('id, full_name, email, role, created_at')
+                    .select('id, full_name, email, role, created_at, is_active')
                     .order('created_at', { ascending: false });
 
+                // Resolved alongside the list so the self-row guard does
+                // not need a second effect (or a second round trip).
+                const {
+                    data: { user },
+                } = await supabase.auth.getUser();
+
                 if (cancelled) return;
+                setSelfId(user?.id ?? null);
 
                 if (error) {
                     console.error('Error fetching team members:', error);
@@ -129,6 +141,10 @@ export default function Team() {
                                     </th>
 
                                     <th className="px-6 py-4 font-semibold">
+                                        Status
+                                    </th>
+
+                                    <th className="px-6 py-4 font-semibold">
                                         Date Joined
                                     </th>
 
@@ -192,6 +208,22 @@ export default function Team() {
                                             </td>
 
                                             <td className="px-6 py-4">
+                                                {/* Deactivated members stay
+                                                    listed so their historical
+                                                    logs keep a recognizable
+                                                    name in the team view. */}
+                                                <span
+                                                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                                        member.is_active
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : 'bg-gray-100 text-gray-500'
+                                                    }`}
+                                                >
+                                                    {member.is_active ? 'Active' : 'Deactivated'}
+                                                </span>
+                                            </td>
+
+                                            <td className="px-6 py-4">
                                                 <div className="text-sm text-gray-900">
                                                     {new Date(member.created_at).toLocaleDateString("en-US", {
                                                         month: "long",
@@ -202,21 +234,11 @@ export default function Team() {
                                             </td>
 
                                             <td className="px-6 py-4">
-                                                <div className="flex justify-end gap-2">
-
-                                                    <button
-                                                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    >
-                                                        Edit
-                                                    </button>
-
-                                                    <button
-                                                        className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500"
-                                                    >
-                                                        Remove
-                                                    </button>
-
-                                                </div>
+                                                <MemberActions
+                                                    member={member}
+                                                    isSelf={member.id === selfId}
+                                                    onMemberUpdated={refreshMembers}
+                                                />
                                             </td>
 
                                         </tr>
