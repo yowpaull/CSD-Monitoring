@@ -149,11 +149,11 @@ export default function AdminLayout({
 
                         <div>
                             <p className="text-sm font-semibold tracking-tight">
-                                TaskBoard
+                                CSD Monitoring
                             </p>
 
                             <p className="text-[11px] text-white/40">
-                                Admin Panel
+                                2026
                             </p>
                         </div>
                     </Link>

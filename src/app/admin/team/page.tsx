@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import AddMember from "./components/AddMember";
 import MemberActions from "./components/MemberActions";
 import { createClient } from "@/lib/supabase/client";
+import { TeamSkeleton } from "@/components/Skeleton";
 
 interface Profile {
     id: string;
@@ -81,8 +82,36 @@ export default function Team() {
     const openAddMember = useCallback(() => setIsAddMemberOpen(true), []);
     const closeAddMember = useCallback(() => setIsAddMemberOpen(false), []);
 
+    if (loading) {
+        return (
+            <div className="p-6">
+                {isAddMemberOpen && (
+                    <AddMember
+                        isOpen={isAddMemberOpen}
+                        onClose={closeAddMember}
+                        onMemberAdded={refreshMembers}
+                    />
+                )}
+
+                <TeamSkeleton />
+            </div>
+        );
+    }
+
     return (
         <div className="p-6">
+            {/* Mount the modal only when open so its server-action
+                state, listeners, and overlay cost nothing while closed.
+                It sits at this exact slot in both the loading and loaded
+                trees so a refetch never unmounts it mid-success-flow. */}
+            {isAddMemberOpen && (
+                <AddMember
+                    isOpen={isAddMemberOpen}
+                    onClose={closeAddMember}
+                    onMemberAdded={refreshMembers}
+                />
+            )}
+
             <div className="mx-auto max-w-6xl">
 
                 <div className="mb-6 flex items-center justify-between">
@@ -93,25 +122,13 @@ export default function Team() {
 
                         <p className="mt-1 text-sm text-gray-500">
                             Manage your members.
-                            {!loading && (
-                                <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-                                    {members.length} {members.length === 1 ? 'member' : 'members'}
-                                </span>
-                            )}
+                            <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+                                {members.length} {members.length === 1 ? 'member' : 'members'}
+                            </span>
                         </p>
                     </div>
 
                     <div>
-                        {/* Mount the modal only when open so its server-action
-                            state, listeners, and overlay cost nothing while closed. */}
-                        {isAddMemberOpen && (
-                            <AddMember
-                                isOpen={isAddMemberOpen}
-                                onClose={closeAddMember}
-                                onMemberAdded={refreshMembers}
-                            />
-                        )}
-
                         <button
                             onClick={openAddMember}
                             className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -156,18 +173,7 @@ export default function Team() {
 
                             <tbody className="divide-y divide-gray-100">
 
-                                {loading ? (
-
-                                    <tr>
-                                        <td
-                                            colSpan={6}
-                                            className="px-6 py-10 text-center text-gray-500"
-                                        >
-                                            Loading team members...
-                                        </td>
-                                    </tr>
-
-                                ) : members.length === 0 ? (
+                                {members.length === 0 ? (
 
                                     <tr>
                                         <td

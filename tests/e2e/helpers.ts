@@ -70,6 +70,7 @@ export function localDateTimeNow(): string {
 
 export async function requireSelectOptions(page: Page, name: string) {
     const select = page.locator(`[name=${name}]`);
+    await expect(select).toBeAttached();
     if ((await select.locator('option').count()) < 2) {
         test.skip(true, `No ${name} options are seeded in the database`);
     }
