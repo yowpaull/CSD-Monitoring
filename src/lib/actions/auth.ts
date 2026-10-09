@@ -209,14 +209,18 @@ export async function createMember(_prevState: ActionResult | null,formData: For
 }
 
 /**
- * Admin-only: renames a team member. Only the name moves through the
- * form — role, email and status are untouched by this action — and the
- * row update itself is re-gated on is_admin() inside the RPC, because
- * RLS only ever permits self-updates on profiles.
+ * Admin-only: edits a team member's full name and role. The name moves
+ * through `set_profile_full_name` and the role through the admin-gated
+ * `set_profile_role` RPC, because RLS only ever permits self-updates on
+ * profiles. An admin cannot change their own role — demoting the
+ * account you are signed in as would lock the team out of admin.
  */
-export async function updateMemberFullName(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+export async function updateMember(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
     const full_name = String(formData.get('full_name') ?? '').trim();
     const member_id = String(formData.get('member_id') ?? '').trim();
+    const role = String(formData.get('role') ?? '').trim();
+
+    const enteredValues = { full_name, role };
 
     // The same rule as editing your own name: one validation story.
     const parsed = updateProfileSchema.safeParse({ full_name });
@@ -224,7 +228,14 @@ export async function updateMemberFullName(_prevState: ActionResult | null, form
     if (!parsed.success) {
         return {
             fieldErrors: parsed.error.flatten().fieldErrors,
-            enteredValues: { full_name },
+            enteredValues,
+        };
+    }
+
+    if (role !== 'admin' && role !== 'user') {
+        return {
+            fieldErrors: { role: ['Role must be either admin or user'] },
+            enteredValues,
         };
     }
 
@@ -239,6 +250,32 @@ export async function updateMemberFullName(_prevState: ActionResult | null, form
         return { error: 'You do not have permission to edit members.' };
     }
 
+    // Read the current values so unchanged parts stay untouched and the
+    // success message can say what actually moved.
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, role')
+        .eq('id', member_id)
+        .single();
+
+    const nameChanged = profile
+        ? profile.full_name !== parsed.data.full_name
+        : true;
+    const roleChanged = profile ? profile.role !== role : false;
+
+    if (roleChanged) {
+        const {
+            data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user && member_id === user.id) {
+            return {
+                error: 'You cannot change your own role.',
+                enteredValues,
+            };
+        }
+    }
+
     const { error } = await supabase.rpc('set_profile_full_name', {
         target_id: member_id,
         new_full_name: parsed.data.full_name,
@@ -248,8 +285,31 @@ export async function updateMemberFullName(_prevState: ActionResult | null, form
         console.error('Failed to update member name:', error);
         return {
             error: 'The member name could not be updated. Please try again.',
-            enteredValues: { full_name },
+            enteredValues,
         };
+    }
+
+    if (roleChanged) {
+        const { error: roleError } = await supabase.rpc('set_profile_role', {
+            target_id: member_id,
+            new_role: role,
+        });
+
+        if (roleError) {
+            console.error('Failed to update member role:', roleError);
+            return {
+                error: 'The member role could not be updated. Please try again.',
+                enteredValues,
+            };
+        }
+    }
+
+    if (roleChanged && nameChanged) {
+        return { message: 'Member updated successfully!' };
+    }
+
+    if (roleChanged) {
+        return { message: 'Member role updated successfully!' };
     }
 
     return { message: 'Member name updated successfully!' };

@@ -204,6 +204,8 @@ export function TeamSkeleton() {
                 <Skeleton className="h-9 w-32" />
             </div>
 
+            <Skeleton className="mb-4 h-10 w-80" />
+
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
                     <div className="flex items-center gap-6">
@@ -229,6 +231,14 @@ export function TeamSkeleton() {
                             <Skeleton className="ml-auto h-8 w-24" />
                         </div>
                     ))}
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3">
+                    <Skeleton className="h-4 w-32" />
+                    <div className="flex items-center gap-2">
+                        <Skeleton className="h-8 w-20" />
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-8 w-16" />
+                    </div>
                 </div>
             </div>
         </div>

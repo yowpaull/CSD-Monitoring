@@ -32,9 +32,16 @@ test.describe('Team management', () => {
             page.locator('span').filter({ hasText: /^\d+ members?$/ })
         ).toBeVisible();
 
+        // Search narrows to the admin's own row, so the guard below
+        // works even once the list spans more than one page.
+        await page
+            .getByLabel('Search members')
+            .fill(adminCreds.email!);
+
         const ownRow = page
             .getByRole('row')
             .filter({ hasText: adminCreds.email! });
+        await expect(ownRow).toBeVisible();
         const deactivate = ownRow.getByRole('button', {
             name: 'Deactivate',
         });
@@ -162,5 +169,114 @@ test.describe('Team management', () => {
 
         await row.getByRole('button', { name: 'Deactivate' }).click();
         await expect(row.getByText('Deactivated')).toBeVisible();
+    });
+
+    test('searches, sorts, paginates and edits the member role', async ({
+        page,
+    }) => {
+        const stamp = uniqueId();
+        const email = `e2e-role-${stamp}@example.com`;
+        const password = 'E2eMember123';
+        const name = `E2E Role ${stamp}`;
+
+        await login(page, adminCreds, '/admin/dashboard');
+        await page.goto('/admin/team');
+
+        await page.getByRole('button', { name: 'Add Member' }).click();
+        const dialog = modal(page, 'Add New Member');
+        await dialog.getByLabel('Full Name').fill(name);
+        await dialog.getByLabel('Email').fill(email);
+        await dialog.getByLabel('Password', { exact: true }).fill(password);
+        await dialog.getByLabel('Confirm Password').fill(password);
+        await dialog.getByLabel('Role').selectOption({ label: 'Member' });
+        await dialog.getByRole('button', { name: 'Add Member' }).click();
+        await expectToast(page, /Account created successfully/);
+        await expect(dialog).toBeHidden();
+
+        const row = page.getByRole('row').filter({ hasText: email });
+        await expect(row).toBeVisible();
+
+        // Search matches both name and email; a miss shows the empty
+        // state, and clearing restores the full list.
+        await page.getByLabel('Search members').fill(name);
+        await expect(row).toBeVisible();
+        await page.getByLabel('Search members').fill(email);
+        await expect(row).toBeVisible();
+        await page.getByLabel('Search members').fill(`no-match-${stamp}`);
+        await expect(
+            page.getByText('No team members found.')
+        ).toBeVisible();
+        await page.getByLabel('Search members').fill('');
+
+        // Name header sort cycles none → A→Z → Z→A → none, and each
+        // sorted view really is ordered the way the icon claims.
+        const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+        await expect(nameHeader).toHaveAttribute('aria-sort', 'none');
+        const sortButton = nameHeader.getByRole('button', {
+            name: 'Name',
+            exact: true,
+        });
+
+        await sortButton.click();
+        await expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
+        const ascending = (
+            await page.locator('tbody tr td:first-child').allTextContents()
+        ).map((text) => text.trim());
+        expect(ascending).toEqual(
+            [...ascending].sort((a, b) => a.localeCompare(b))
+        );
+
+        await sortButton.click();
+        await expect(nameHeader).toHaveAttribute('aria-sort', 'descending');
+        const descending = (
+            await page.locator('tbody tr td:first-child').allTextContents()
+        ).map((text) => text.trim());
+        expect(descending).toEqual(
+            [...descending].sort((a, b) => b.localeCompare(a))
+        );
+
+        await sortButton.click();
+        await expect(nameHeader).toHaveAttribute('aria-sort', 'none');
+
+        // Pagination only appears once the list is longer than one page.
+        const countText = await page
+            .locator('span')
+            .filter({ hasText: /^\d+ members?$/ })
+            .textContent();
+        const total = Number((countText ?? '').split(' ')[0]);
+        if (total > 10) {
+            await page.getByRole('button', { name: 'Next page' }).click();
+            await expect(page.getByText(/Page 2 of \d+/)).toBeVisible();
+            await page
+                .getByRole('button', { name: 'Previous page' })
+                .click();
+            await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
+        }
+
+        // Role edit: promote, verify, then demote again to leave the
+        // shared e2e database with one admin fewer than it gained.
+        await row.getByRole('button', { name: 'Edit' }).click();
+        const editDialog = modal(page, 'Edit Member');
+        await editDialog.getByLabel('Role').selectOption({ label: 'Admin' });
+        await editDialog
+            .getByRole('button', { name: 'Save Changes' })
+            .click();
+        await expectToast(page, 'Member role updated successfully!');
+        await expect(editDialog).toBeHidden();
+        await page.reload();
+        await expect(row).toContainText('admin');
+
+        await row.getByRole('button', { name: 'Edit' }).click();
+        const demoteDialog = modal(page, 'Edit Member');
+        await demoteDialog
+            .getByLabel('Role')
+            .selectOption({ label: 'Member' });
+        await demoteDialog
+            .getByRole('button', { name: 'Save Changes' })
+            .click();
+        await expectToast(page, 'Member role updated successfully!');
+        await expect(demoteDialog).toBeHidden();
+        await page.reload();
+        await expect(row).toContainText('user');
     });
 });

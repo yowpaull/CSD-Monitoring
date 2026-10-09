@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
 import AddMember from "./components/AddMember";
 import MemberActions from "./components/MemberActions";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +16,8 @@ interface Profile {
     is_active: boolean;
 }
 
+const PAGE_SIZE = 10;
+
 export default function Team() {
 
     const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
@@ -26,6 +29,12 @@ export default function Team() {
     // Bumped every time a member is added so the table re-fetches
     // and always shows every member in the database.
     const [membersVersion, setMembersVersion] = useState(0);
+
+    const [search, setSearch] = useState('');
+    const [nameSort, setNameSort] = useState<'none' | 'asc' | 'desc'>(
+        'none'
+    );
+    const [page, setPage] = useState(1);
 
     // Reuse one browser client instead of constructing a new one per fetch.
     const supabase = useMemo(() => createClient(), []);
@@ -81,6 +90,39 @@ export default function Team() {
     // re-subscribe on every parent render.
     const openAddMember = useCallback(() => setIsAddMemberOpen(true), []);
     const closeAddMember = useCallback(() => setIsAddMemberOpen(false), []);
+
+    const filteredMembers = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        if (!query) return members;
+
+        return members.filter(
+            (member) =>
+                (member.full_name ?? '').toLowerCase().includes(query) ||
+                (member.email ?? '').toLowerCase().includes(query)
+        );
+    }, [members, search]);
+
+    const sortedMembers = useMemo(() => {
+        if (nameSort === 'none') return filteredMembers;
+
+        const sign = nameSort === 'asc' ? 1 : -1;
+        return [...filteredMembers].sort(
+            (a, b) =>
+                (a.full_name ?? 'Unnamed User').localeCompare(
+                    b.full_name ?? 'Unnamed User'
+                ) * sign
+        );
+    }, [filteredMembers, nameSort]);
+
+    const pageCount = Math.max(
+        1,
+        Math.ceil(sortedMembers.length / PAGE_SIZE)
+    );
+    const currentPage = Math.min(page, pageCount);
+    const visibleMembers = sortedMembers.slice(
+        (currentPage - 1) * PAGE_SIZE,
+        currentPage * PAGE_SIZE
+    );
 
     if (loading) {
         return (
@@ -138,6 +180,23 @@ export default function Team() {
                     </div>
                 </div>
 
+                <div className="mb-4">
+                    <div className="relative w-full sm:w-80">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <input
+                            type="search"
+                            aria-label="Search members"
+                            placeholder="Search by name or email..."
+                            value={search}
+                            onChange={(event) => {
+                                setSearch(event.target.value);
+                                setPage(1);
+                            }}
+                            className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-4 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                </div>
+
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                     <div className="overflow-x-auto">
 
@@ -145,8 +204,40 @@ export default function Team() {
 
                             <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wider text-gray-500">
                                 <tr>
-                                    <th className="px-6 py-4 font-semibold">
-                                        Name
+                                    <th
+                                        scope="col"
+                                        aria-sort={
+                                            nameSort === 'asc'
+                                                ? 'ascending'
+                                                : nameSort === 'desc'
+                                                  ? 'descending'
+                                                  : 'none'
+                                        }
+                                        className="px-6 py-4 font-semibold"
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setNameSort(
+                                                    nameSort === 'none'
+                                                        ? 'asc'
+                                                        : nameSort === 'asc'
+                                                          ? 'desc'
+                                                          : 'none'
+                                                )
+                                            }
+                                            title="Sort by name"
+                                            className="inline-flex items-center gap-1 transition-colors hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            Name
+                                            {nameSort === 'asc' ? (
+                                                <ArrowUp size={14} />
+                                            ) : nameSort === 'desc' ? (
+                                                <ArrowDown size={14} />
+                                            ) : (
+                                                <ArrowUpDown size={14} />
+                                            )}
+                                        </button>
                                     </th>
 
                                     <th className="px-6 py-4 font-semibold">
@@ -173,7 +264,7 @@ export default function Team() {
 
                             <tbody className="divide-y divide-gray-100">
 
-                                {members.length === 0 ? (
+                                {sortedMembers.length === 0 ? (
 
                                     <tr>
                                         <td
@@ -186,7 +277,7 @@ export default function Team() {
 
                                 ) : (
 
-                                    members.map((member) => (
+                                    visibleMembers.map((member) => (
 
                                         <tr
                                             key={member.id}
@@ -258,6 +349,41 @@ export default function Team() {
                         </table>
 
                     </div>
+
+                    {sortedMembers.length > 0 && (
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-6 py-3">
+                            <p className="text-sm text-gray-500">
+                                Showing {(currentPage - 1) * PAGE_SIZE + 1}
+                                –{Math.min(currentPage * PAGE_SIZE, sortedMembers.length)} of {sortedMembers.length}
+                            </p>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setPage(currentPage - 1)}
+                                    disabled={currentPage <= 1}
+                                    aria-label="Previous page"
+                                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    Previous
+                                </button>
+
+                                <span className="text-sm text-gray-500">
+                                    Page {currentPage} of {pageCount}
+                                </span>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setPage(currentPage + 1)}
+                                    disabled={currentPage >= pageCount}
+                                    aria-label="Next page"
+                                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
             </div>
