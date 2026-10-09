@@ -1,10 +1,5 @@
-import Link from 'next/link';
 import { CalendarDays, Inbox, UserCheck } from 'lucide-react';
 
-import {
-    formatTimestampParts,
-    statusBadgeClass,
-} from '@/lib/inquiry-log';
 import {
     CATEGORY_TOP_N,
     getAdminDashboardData,
@@ -16,6 +11,7 @@ import {
     WeeklyTrendLine,
 } from './DashboardCharts';
 import MonthFilter from './MonthFilter';
+import RecentInquiries from './RecentInquiries';
 
 const CARD_CLASS = 'rounded-xl border border-slate-200 bg-white p-6 shadow-sm';
 
@@ -166,7 +162,18 @@ export default async function Dashboard({
                 <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <ChartCard
                         title="Status"
-                        subtitle="All inquiries by current status"
+                        subtitle={
+                            data.statusCounts.some(
+                                (entry) => entry.value > 0
+                            )
+                                ? data.statusCounts
+                                      .map(
+                                          (entry) =>
+                                              `${entry.label} - ${entry.value}`
+                                      )
+                                      .join(' · ')
+                                : 'All inquiries by current status'
+                        }
                     >
                         <StatusDoughnut data={data.statusCounts} />
                     </ChartCard>
@@ -214,120 +221,10 @@ export default async function Dashboard({
                 </div>
 
                 {/* Recent logs */}
-                <section className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
-                        <div>
-                            <h2 className="text-base font-semibold text-slate-900">
-                                Recent Inquiries
-                            </h2>
-                            <p className="mt-0.5 text-xs text-slate-500">
-                                The {data.recentLogs.length} most recent
-                                {data.totalCount > data.recentLogs.length
-                                    ? ` of ${data.totalCount.toLocaleString()}`
-                                    : ''}{' '}
-                                logs
-                            </p>
-                        </div>
-
-                        <Link
-                            href="/admin/inquiry-logs"
-                            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                            View All
-                        </Link>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-slate-600">
-                            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-                                <tr>
-                                    <th className="px-6 py-3 font-semibold">
-                                        Inquiry Date
-                                    </th>
-                                    <th className="px-6 py-3 font-semibold">
-                                        Customer
-                                    </th>
-                                    <th className="px-6 py-3 font-semibold">
-                                        Representative
-                                    </th>
-                                    <th className="px-6 py-3 font-semibold">
-                                        Platform
-                                    </th>
-                                    <th className="px-6 py-3 font-semibold">
-                                        Brand
-                                    </th>
-                                    <th className="px-6 py-3 text-right font-semibold">
-                                        Status
-                                    </th>
-                                </tr>
-                            </thead>
-
-                            <tbody className="divide-y divide-slate-100">
-                                {data.recentLogs.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            colSpan={6}
-                                            className="px-6 py-10 text-center text-slate-500"
-                                        >
-                                            No inquiries logged yet.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    data.recentLogs.map((row) => {
-                                        const inquiry =
-                                            formatTimestampParts(
-                                                row.inquiry_datetime
-                                            );
-
-                                        return (
-                                            <tr
-                                                key={row.id}
-                                                className="transition-colors hover:bg-slate-50"
-                                            >
-                                                <td className="px-6 py-3">
-                                                    <div className="text-sm font-medium text-slate-900">
-                                                        {inquiry.date}
-                                                    </div>
-                                                    <div className="text-xs text-slate-500">
-                                                        {inquiry.time}
-                                                    </div>
-                                                </td>
-
-                                                <td className="max-w-[12rem] truncate px-6 py-3">
-                                                    {row.customer_name}
-                                                </td>
-
-                                                <td className="px-6 py-3">
-                                                    {row.representative
-                                                        ?.full_name ??
-                                                        '—'}
-                                                </td>
-
-                                                <td className="px-6 py-3">
-                                                    {row.platform?.name ??
-                                                        '—'}
-                                                </td>
-
-                                                <td className="px-6 py-3">
-                                                    {row.brand?.name ??
-                                                        '—'}
-                                                </td>
-
-                                                <td className="px-6 py-3 text-right">
-                                                    <span
-                                                        className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(row.status)}`}
-                                                    >
-                                                        {row.status}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
+                <RecentInquiries
+                    rows={data.recentLogs}
+                    totalCount={data.totalCount}
+                />
             </div>
         </div>
     );

@@ -14,6 +14,7 @@ import {
 } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 
+import type { Plugin } from 'chart.js';
 import type { DashboardCount } from '@/lib/queries/admin-dashboard';
 
 // Controllers arrive with the typed components from react-chartjs-2;
@@ -111,12 +112,61 @@ export function StatusDoughnut({ data }: { data: DashboardCount[] }) {
                                 boxHeight: 6,
                                 padding: 16,
                                 font: FONT,
+                                generateLabels: (chart) => {
+                                    const values = (chart.data.datasets[0]
+                                        ?.data ?? []) as number[];
+                                    const total = values.reduce(
+                                        (sum, value) => sum + value,
+                                        0
+                                    );
+
+                                    return (
+                                        chart.data.labels ?? []
+                                    ).map((label, index) => {
+                                        const text = String(label);
+                                        const share = total
+                                            ? Math.round(
+                                                  ((values[index] ?? 0) /
+                                                      total) *
+                                                      100
+                                              )
+                                            : 0;
+
+                                        return {
+                                            text: `${text} ${share}%`,
+                                            fillStyle:
+                                                STATUS_COLORS[text] ??
+                                                FALLBACK_COLOR,
+                                            strokeStyle:
+                                                STATUS_COLORS[text] ??
+                                                FALLBACK_COLOR,
+                                            pointStyle: 'circle',
+                                            hidden: !chart.isDatasetVisible(
+                                                0
+                                            ),
+                                            index,
+                                            datasetIndex: 0,
+                                        };
+                                    });
+                                },
                             },
                         },
                         tooltip: {
                             callbacks: {
-                                label: (context) =>
-                                    ` ${context.label}: ${context.parsed} inquiries`,
+                                label: (context) => {
+                                    const values = (context.chart.data
+                                        .datasets[0]?.data ?? []) as number[];
+                                    const total = values.reduce(
+                                        (sum, value) => sum + value,
+                                        0
+                                    );
+                                    const count = Number(context.parsed);
+                                    const share = total
+                                        ? Math.round((count / total) * 100)
+                                        : 0;
+
+                                    return ` ${context.label}: ${count} (${share}%) inquiries`;
+                                },
                             },
                         },
                     },
@@ -186,6 +236,35 @@ export function WeeklyTrendLine({ data }: { data: DashboardCount[] }) {
     );
 }
 
+const valueLabelsPlugin: Plugin<'bar'> = {
+    id: 'countValueLabels',
+    afterDatasetsDraw(chart) {
+        const dataset = chart.data.datasets[0];
+        if (!dataset) return;
+
+        const ctx = chart.ctx;
+        const meta = chart.getDatasetMeta(0);
+
+        ctx.save();
+        ctx.fillStyle = '#475569';
+        ctx.font =
+            '600 11px ui-sans-serif, system-ui, -apple-system, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+
+        meta.data.forEach((bar, index) => {
+            const value = dataset.data[index] as number | null | undefined;
+            if (value === null || value === undefined || value === 0) return;
+
+            ctx.fillText(String(value), bar.x + 6, bar.y);
+        });
+
+        ctx.restore();
+    },
+};
+
+const BAR_PLUGINS: Plugin<'bar'>[] = [valueLabelsPlugin];
+
 /**
  * Shared horizontal bars for the platform / brand / category charts —
  * horizontal so long names stay readable without rotating labels.
@@ -210,6 +289,7 @@ export function CountBarChart({
             aria-label={chartAltText('Inquiry counts', data)}
         >
             <Bar
+                plugins={BAR_PLUGINS}
                 data={{
                     labels: data.map((entry) => entry.label),
                     datasets: [
@@ -226,6 +306,9 @@ export function CountBarChart({
                     indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
+                    layout: {
+                        padding: { right: 36 },
+                    },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
