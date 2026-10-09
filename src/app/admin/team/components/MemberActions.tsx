@@ -16,6 +16,7 @@ interface MemberActionsProps {
     member: {
         id: string;
         full_name: string | null;
+        role: string | null;
         is_active: boolean;
     };
     isSelf: boolean;
@@ -27,7 +28,7 @@ interface MemberActionsProps {
 const initialState: ActionResult = {};
 
 /**
- * The Actions cell of the team table: Edit opens the rename modal, and
+ * The Actions cell of the team table: Edit opens the name/role editor, and
  * Remove is a Deactivate ⇄ Activate toggle rather than a delete — the
  * profile row is referenced by inquiry_log.representative_id, so
  * deactivation is what "removing" a member means here.

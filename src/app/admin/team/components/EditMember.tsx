@@ -3,7 +3,7 @@
 import { memo, useActionState, useEffect, useRef } from 'react';
 
 import {
-    updateMemberFullName,
+    updateMember,
     type ActionResult,
 } from '@/lib/actions/auth';
 import { useActionToast } from '@/lib/hooks/useActionToast';
@@ -12,6 +12,7 @@ interface EditMemberProps {
     member: {
         id: string;
         full_name: string | null;
+        role: string | null;
     };
     isOpen: boolean;
     onClose: () => void;
@@ -26,17 +27,16 @@ const inputClassName =
     'w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60';
 
 /**
- * Modal for the team table's Edit button. Full name only — role, email
- * and status are deliberately not editable here, so the form cannot
- * carry anything the updateMemberFullName action would ignore anyway.
+ * Modal for the team table's Edit button — full name and role. Email
+ * and status are deliberately not editable here.
  *
- * Structured after AddMember: uncontrolled input (defaultValue only),
+ * Structured after AddMember: uncontrolled inputs (defaultValue only),
  * Escape closes, success message shown briefly before the modal closes
  * and the table refetches.
  */
 function EditMember({ member, isOpen, onClose, onMemberUpdated }: EditMemberProps) {
     const [state, formAction, isPending] = useActionState(
-        updateMemberFullName,
+        updateMember,
         initialState
     );
     const formRef = useRef<HTMLFormElement>(null);
@@ -66,8 +66,8 @@ function EditMember({ member, isOpen, onClose, onMemberUpdated }: EditMemberProp
         };
     }, [isOpen, onClose]);
 
-    // `updateMemberFullName` returns `message` only on success — refresh
-    // the table and close shortly after so the new name appears.
+    // `updateMember` returns `message` only on success — refresh
+    // the table and close shortly after so the new values appear.
     const succeeded = Boolean(state?.message);
     useEffect(() => {
         if (!succeeded) return;
@@ -80,11 +80,11 @@ function EditMember({ member, isOpen, onClose, onMemberUpdated }: EditMemberProp
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4"
+            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 px-4 py-6"
             onClick={onClose}
         >
             <div
-                className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+                className="my-auto w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
@@ -98,7 +98,8 @@ function EditMember({ member, isOpen, onClose, onMemberUpdated }: EditMemberProp
                                 Edit Member
                             </h2>
                             <p className="mt-1 text-sm text-slate-500">
-                                Update this member&apos;s full name.
+                                Update this member&apos;s full name and
+                                role.
                             </p>
                         </div>
 
@@ -156,6 +157,32 @@ function EditMember({ member, isOpen, onClose, onMemberUpdated }: EditMemberProp
                         />
                         {state.fieldErrors?.full_name && (
                             <p className="mt-1 text-xs text-red-500">{state.fieldErrors.full_name[0]}</p>
+                        )}
+                    </div>
+
+                    <div className="mb-5">
+                        <label htmlFor="member_role" className="mb-2 block text-sm font-medium text-slate-700">
+                            Role
+                        </label>
+                        <select
+                            id="member_role"
+                            name="role"
+                            defaultValue={
+                                state.enteredValues?.role ??
+                                member.role ??
+                                'user'
+                            }
+                            disabled={isPending}
+                            className={`${inputClassName} appearance-none`}
+                            required
+                        >
+                            {/* Values must match the profiles.role CHECK
+                                constraint ('admin', 'user'). */}
+                            <option value="admin">Admin</option>
+                            <option value="user">Member</option>
+                        </select>
+                        {state.fieldErrors?.role && (
+                            <p className="mt-1 text-xs text-red-500">{state.fieldErrors.role[0]}</p>
                         )}
                     </div>
 

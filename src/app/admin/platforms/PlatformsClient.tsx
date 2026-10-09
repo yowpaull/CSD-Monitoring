@@ -158,7 +158,7 @@ export default function PlatformsClient({
         <div className="p-6">
 
             {/* Header */}
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-semibold">
                         Platforms
