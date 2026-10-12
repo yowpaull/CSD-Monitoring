@@ -157,6 +157,14 @@ function buildLogQuery(
         query = query.eq('representative_id', userId);
     }
 
+    if (filters.customer_name) {
+        // Escape LIKE metacharacters so the term is matched literally.
+        const escaped = filters.customer_name
+            .replace(/[\\%_]/g, (char) => `\\${char}`);
+
+        query = query.ilike('customer_name', `%${escaped}%`);
+    }
+
     if (filters.brand_id) {
         query = query.eq('brand_id', filters.brand_id);
     }

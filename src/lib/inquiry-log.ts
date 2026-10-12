@@ -14,6 +14,7 @@ export const LOG_PAGE_SIZES = [25, 50, 100] as const;
 export const DEFAULT_LOG_PAGE_SIZE = 25;
 
 export const EMPTY_LOG_FILTERS: InquiryLogFilters = {
+    customer_name: '',
     brand_id: '',
     platform_id: '',
     representative_id: '',
@@ -55,7 +56,14 @@ export function parseLogFilters(
 
     const status = readParam(params.status).trim();
 
+    // Substring search: trim and cap length, but allow any characters
+    // (they are passed to PostgREST as an ilike pattern, not SQL).
+    const customerName = readParam(params.customer_name)
+        .trim()
+        .slice(0, 150);
+
     return {
+        customer_name: customerName,
         brand_id: uuid('brand_id'),
         platform_id: uuid('platform_id'),
         representative_id: uuid('representative_id'),

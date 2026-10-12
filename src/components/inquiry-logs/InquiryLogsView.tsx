@@ -18,6 +18,7 @@ import {
     Download,
     FilterX,
     RefreshCw,
+    Search,
 } from 'lucide-react';
 
 import {
@@ -224,37 +225,8 @@ export default function InquiryLogsView({
      * Every filter change rewinds to page 1 — page 7 of the previous
      * result set is meaningless once the result set changes.
      */
-    const applyFilters = useCallback(
-        (form: HTMLFormElement) => {
-            const data = new FormData(form);
-
-            const value = (key: keyof InquiryLogFilters) =>
-                String(data.get(key) ?? '').trim();
-
-            const nextFilters: InquiryLogFilters = {
-                brand_id: value('brand_id'),
-                platform_id: value('platform_id'),
-                representative_id:
-                    value('representative_id'),
-                inquiry_sub_category_id:
-                    value('inquiry_sub_category_id'),
-                status: value('status'),
-                created_date: value('created_date'),
-                inquiry_from: value('inquiry_from'),
-                inquiry_to: value('inquiry_to'),
-            };
-
-            const parsedSize = Number.parseInt(
-                String(data.get('page_size') ?? ''),
-                10
-            );
-
-            const nextSize = (
-                LOG_PAGE_SIZES as readonly number[]
-            ).includes(parsedSize)
-                ? parsedSize
-                : pageSize;
-
+    const navigateWithFilters = useCallback(
+        (nextFilters: InquiryLogFilters, nextSize: number) => {
             const query = buildLogQueryString(
                 nextFilters,
                 1,
@@ -268,7 +240,55 @@ export default function InquiryLogsView({
                 );
             });
         },
-        [pageSize, pathname, router]
+        [pathname, router]
+    );
+
+    /**
+     * Reads the dropdown/date controls. `customer_name` lives in the
+     * separate search bar, so it falls back to the applied value to
+     * keep the term when other filters change.
+     */
+    const collectFilters = useCallback(
+        (form: HTMLFormElement | null): InquiryLogFilters => {
+            const data = form ? new FormData(form) : null;
+
+            const value = (key: keyof InquiryLogFilters) =>
+                String(data?.get(key) ?? filters[key] ?? '').trim();
+
+            return {
+                customer_name: value('customer_name'),
+                brand_id: value('brand_id'),
+                platform_id: value('platform_id'),
+                representative_id: value('representative_id'),
+                inquiry_sub_category_id:
+                    value('inquiry_sub_category_id'),
+                status: value('status'),
+                created_date: value('created_date'),
+                inquiry_from: value('inquiry_from'),
+                inquiry_to: value('inquiry_to'),
+            };
+        },
+        [filters]
+    );
+
+    const applyFilters = useCallback(
+        (form: HTMLFormElement) => {
+            const data = new FormData(form);
+
+            const parsedSize = Number.parseInt(
+                String(data.get('page_size') ?? ''),
+                10
+            );
+
+            const nextSize = (
+                LOG_PAGE_SIZES as readonly number[]
+            ).includes(parsedSize)
+                ? parsedSize
+                : pageSize;
+
+            navigateWithFilters(collectFilters(form), nextSize);
+        },
+        [collectFilters, navigateWithFilters, pageSize]
     );
 
     const handleSubmit = useCallback(
@@ -277,6 +297,25 @@ export default function InquiryLogsView({
             applyFilters(event.currentTarget);
         },
         [applyFilters]
+    );
+
+    /** Search bar sits outside the filter form, so it merges itself. */
+    const handleSearchSubmit = useCallback(
+        (event: FormEvent<HTMLFormElement>) => {
+            event.preventDefault();
+
+            const term = String(
+                new FormData(event.currentTarget).get(
+                    'customer_name'
+                ) ?? ''
+            ).trim();
+
+            navigateWithFilters(
+                { ...collectFilters(formRef.current), customer_name: term },
+                pageSize
+            );
+        },
+        [collectFilters, navigateWithFilters, pageSize]
     );
 
     const handleAutoApply = useCallback(
@@ -289,29 +328,13 @@ export default function InquiryLogsView({
     );
 
     const handleClear = useCallback(() => {
-        const form = formRef.current;
-
-        // `form.reset()` would restore the *current* filter values, not
-        // empty ones, so blank the controls directly. The page-size
-        // select is not a filter and keeps its value.
-        if (form) {
-            for (const element of form.elements) {
-                if (
-                    element instanceof HTMLSelectElement ||
-                    element instanceof HTMLInputElement
-                ) {
-                    element.value =
-                        element.name === 'page_size'
-                            ? String(pageSize)
-                            : '';
-                }
-            }
-        }
-
+        // The parent remounts this view on a `key` derived from the
+        // filters, so navigating to the bare path resets every control
+        // (including the search bar) from the fresh empty props.
         startTransition(() => {
             router.push(pathname, { scroll: false });
         });
-    }, [pageSize, pathname, router]);
+    }, [pathname, router]);
 
     return (
         <div className="p-6">
@@ -618,6 +641,34 @@ export default function InquiryLogsView({
                         </p>
                     )}
                 </div>
+
+
+                {/* SEARCH */}
+
+                <form
+                    onSubmit={handleSearchSubmit}
+                    role="search"
+                    aria-label="Search inquiry logs by customer name"
+                    className="mb-3"
+                >
+                    <div className="relative max-w-md">
+                        <Search
+                            size={16}
+                            aria-hidden="true"
+                            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                        />
+
+                        <input
+                            type="search"
+                            id="customer_name"
+                            name="customer_name"
+                            defaultValue={filters.customer_name}
+                            placeholder="Search by customer name..."
+                            maxLength={150}
+                            className={`${CONTROL_CLASS} pl-9`}
+                        />
+                    </div>
+                </form>
 
 
                 {/* TABLE */}

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { ChevronRight, LogOut, Menu, PanelLeft, Sparkles, X } from 'lucide-react';
+import { ChevronRight, LogOut, Menu, PanelLeft, X } from 'lucide-react';
 
 import { logout } from '@/lib/actions/auth';
 import { createClient } from '@/lib/supabase/client';
