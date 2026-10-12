@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { ChevronRight, LogOut, Menu, PanelLeft, Sparkles, X } from 'lucide-react';
 
@@ -198,8 +199,14 @@ export default function AppShell({
                         title={collapsed ? headerTitle : undefined}
                         className="flex items-center gap-3"
                     >
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 shadow-lg shadow-indigo-600/20">
-                            <Sparkles size={17} />
+                        <div className="flex shrink-0 items-center justify-center">
+                            <Image
+                                src="/logo.png"
+                                alt="CSD Monitoring Logo"
+                                width={30}
+                                height={30}
+                                className="h-10 w-10 rounded-full"
+                            />
                         </div>
 
                         <div className={collapsed ? 'lg:hidden' : ''}>
