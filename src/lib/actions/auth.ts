@@ -4,11 +4,23 @@ import { createClient, createEphemeralClient } from '@/lib/supabase/server';
 import {
     changePasswordSchema,
     createMemberSchema,
+    forgotPasswordSchema,
     loginSchema,
+    resetPasswordSchema,
     updateProfileSchema,
 } from '@/lib/validations/auth-schema';
+import { rateLimit } from '@/lib/rate-limit';
+import { PASSWORD_RESET_COOKIE } from '@/lib/password-reset';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+
+const PASSWORD_RESET_WINDOW_MS = 15 * 60 * 1000;
+// Per-address budget stops one victim being email-bombed; the larger
+// per-IP budget lets shared offices work while still capping a single
+// source hammering many addresses.
+const PASSWORD_RESET_EMAIL_LIMIT = 3;
+const PASSWORD_RESET_IP_LIMIT = 30;
 
 export type ActionResult = {
     error? : string;
@@ -105,6 +117,183 @@ export async function login(_prevState: ActionResult | null, formData: FormData)
     }
 
     redirect('/user/log');
+}
+
+/**
+ * The best-effort caller IP for rate-limit keying. `x-forwarded-for`
+ * is preferred because the deployment sits behind a proxy; the leftmost
+ * entry is the client. Falls back to `x-real-ip`, then a shared
+ * sentinel so a missing header cannot bypass the limit.
+ */
+async function clientIpAddress(): Promise<string> {
+    const headerList = await headers();
+
+    const forwardedFor = headerList.get('x-forwarded-for');
+    if (forwardedFor) {
+        const first = forwardedFor.split(',')[0]?.trim();
+        if (first) return first;
+    }
+
+    return headerList.get('x-real-ip')?.trim() || 'unknown';
+}
+
+/** Builds the absolute origin the recovery email should redirect back to. */
+async function requestOrigin(): Promise<string> {
+    const headerList = await headers();
+
+    const host =
+        headerList.get('x-forwarded-host')?.split(',')[0]?.trim() ||
+        headerList.get('host') ||
+        'localhost:3000';
+    const proto =
+        headerList.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
+        (host.startsWith('localhost') ? 'http' : 'https');
+
+    return `${proto}://${host}`;
+}
+
+/**
+ * Sends the password-reset email after rate limiting by address and by
+ * IP. The response is always the same generic success line: it must not
+ * reveal whether the address belongs to an account (enumeration) or
+ * whether the send failed.
+ */
+export async function requestPasswordReset(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+    const email = String(formData.get('email') ?? '').trim();
+
+    const parsed = forgotPasswordSchema.safeParse({ email });
+
+    if (!parsed.success) {
+        return {
+            fieldErrors: parsed.error.flatten().fieldErrors,
+            enteredValues: { email },
+        };
+    }
+
+    const normalizedEmail = parsed.data.email.toLowerCase();
+    const ip = await clientIpAddress();
+
+    // Counts every attempt, valid address or not, so the limiter cannot
+    // be used to infer which emails are registered.
+    const emailLimit = rateLimit({
+        key: `password-reset:email:${normalizedEmail}`,
+        limit: PASSWORD_RESET_EMAIL_LIMIT,
+        windowMs: PASSWORD_RESET_WINDOW_MS,
+    });
+    const ipLimit = rateLimit({
+        key: `password-reset:ip:${ip}`,
+        limit: PASSWORD_RESET_IP_LIMIT,
+        windowMs: PASSWORD_RESET_WINDOW_MS,
+    });
+
+    if (!emailLimit.allowed || !ipLimit.allowed) {
+        const retryAfter = Math.max(
+            emailLimit.retryAfterSeconds,
+            ipLimit.retryAfterSeconds
+        );
+
+        return {
+            error: `Too many reset requests. Please wait ${retryAfter} seconds and try again.`,
+            enteredValues: { email },
+        };
+    }
+
+    const origin = await requestOrigin();
+
+    // Must be the cookie-based client, not createEphemeralClient: the
+    // Supabase SSR client runs the PKCE flow, and the code verifier it
+    // mints here is persisted to a cookie that /auth/callback reads back
+    // when exchanging the code for a session. The anonymous client has no
+    // storage and falls back to the implicit flow, whose recovery links
+    // carry no `code` — the callback would send the user to the login
+    // page. Nothing is signed in on this public page, so writing cookies
+    // (the verifier) cannot clobber a session.
+    const supabase = await createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(
+        normalizedEmail,
+        { redirectTo: `${origin}/auth/callback?next=/reset-password` }
+    );
+
+    if (error) {
+        // Logged, never surfaced: "no such user" would leak which
+        // addresses are registered.
+        console.error('Failed to send password reset email:', error);
+    }
+
+    return {
+        success: true,
+        message:
+            'If an account exists for that email, a password reset link is on its way.',
+        enteredValues: { email },
+    };
+}
+
+/**
+ * Completes a reset using the recovery session created by
+ * `/auth/callback`. The httpOnly marker cookie proves the request came
+ * from the emailed link, so a normal (or stolen) session cannot rotate
+ * the password without mailbox control.
+ */
+export async function resetPassword(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+    const parsed = resetPasswordSchema.safeParse({
+        password: formData.get('password'),
+        confirm_password: formData.get('confirm_password'),
+    });
+
+    if (!parsed.success) {
+        return { fieldErrors: parsed.error.flatten().fieldErrors };
+    }
+
+    const supabase = await createClient();
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    const cookieStore = await cookies();
+    const marker = cookieStore.get(PASSWORD_RESET_COOKIE)?.value;
+
+    if (!user || !marker || marker !== user.id) {
+        return {
+            error:
+                'This password reset link is invalid or has expired. Please request a new one.',
+        };
+    }
+
+    const { error } = await supabase.auth.updateUser({
+        password: parsed.data.password,
+    });
+
+    if (error) {
+        console.error('Failed to reset password:', error);
+
+        if (
+            error.message.toLowerCase().includes('different') ||
+            error.message.toLowerCase().includes('same')
+        ) {
+            return {
+                fieldErrors: {
+                    password: [
+                        'New password must be different from your old password.',
+                    ],
+                },
+            };
+        }
+
+        return {
+            error:
+                'Your password could not be updated. Please request a new reset link.',
+        };
+    }
+
+    // Consume the marker and end the recovery session: the link is
+    // single-use and the user signs back in with the new password.
+    cookieStore.delete(PASSWORD_RESET_COOKIE);
+    await supabase.auth.signOut();
+
+    return {
+        success: true,
+        message: 'Your password has been updated. You can now sign in.',
+    };
 }
 
 export async function createMember(_prevState: ActionResult | null,formData: FormData): Promise<ActionResult> {

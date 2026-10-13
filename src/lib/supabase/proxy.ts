@@ -10,7 +10,11 @@ const USER_HOME = '/user/log'
 function isPublicPath(pathname: string) {
     return (
         pathname === LOGIN_PATH ||
-        pathname.startsWith('/auth/')
+        pathname.startsWith('/auth/') ||
+        // Requesting a reset link happens before any session exists, so
+        // the page must be reachable while signed out. Completion at
+        // /reset-password is gated by the recovery session instead.
+        pathname === '/forgot-password'
     )
 }
 
