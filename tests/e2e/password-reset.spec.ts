@@ -96,4 +96,31 @@ test.describe('Forgot password', () => {
             page.getByRole('heading', { name: 'Set a new password' })
         ).toBeVisible();
     });
+
+    test('confines the app while a recovery is pending', async ({ page }) => {
+        requireUser();
+
+        await login(page, userCreds, '/user/log');
+
+        // Simulate the marker /auth/callback sets after a recovery link
+        // has been exchanged: as long as it exists the proxy must refuse
+        // access to anything but the reset page.
+        await page.context().addCookies([
+            {
+                name: 'csd-password-reset',
+                value: 'pending',
+                domain: 'localhost',
+                httpOnly: true,
+                sameSite: 'Lax',
+                path: '/',
+            },
+        ]);
+
+        await page.goto('/admin/dashboard');
+
+        await expect(page).toHaveURL(`${BASE_URL}/reset-password`);
+        await expect(
+            page.getByRole('heading', { name: 'Set a new password' })
+        ).toBeVisible();
+    });
 });
