@@ -233,6 +233,14 @@ const EXPORT_COLUMNS: ExportColumn[] = [
         numFmt: DATETIME_FORMAT,
         value: (row) => instantCell(row.updated_at),
     },
+    {
+        header: 'Last Updated By',
+        width: 22,
+        value: (row) =>
+            row.updated_by_profile?.full_name ||
+            row.updated_by_profile?.email ||
+            null,
+    },
 ];
 
 const HEADER_FILL: ExcelJS.Fill = {
@@ -330,10 +338,10 @@ function exportDateLabel(filters: InquiryLogFilters): string {
 }
 
 /**
- * One handler behind two routes: `/admin/inquiry-logs/export` and
- * `/user/logs/export`. The proxy middleware already guards both paths,
- * and the query layer re-checks the role, so this only has to translate
- * its result into a file response.
+ * One handler behind three routes: `/admin/inquiry-logs/export`,
+ * `/user/logs/export` and `/user/open-inquiry-logs/export`. The proxy
+ * middleware already guards all three paths, and the query layer re-checks
+ * the role, so this only has to translate its result into a file response.
  */
 export async function handleInquiryLogsExport(
     scope: InquiryLogScope,
@@ -354,7 +362,7 @@ export async function handleInquiryLogsExport(
     });
 
     const filename = `${
-        scope === 'admin' ? '' : 'my-'
+        scope === 'admin' ? '' : scope === 'open' ? 'open-' : 'my-'
     }inquiry-logs-${exportDateLabel(filters)}.xlsx`;
 
     return new Response(file, {

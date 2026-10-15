@@ -3,6 +3,7 @@
 import {
     SquareCheckBig,
     ScrollText,
+    FolderOpen,
     User,
 } from 'lucide-react';
 
@@ -23,6 +24,11 @@ export default function UserLayout({
             icon: <ScrollText size={18} />,
             name: 'My Logs',
             href: '/user/logs',
+        },
+        {
+            icon: <FolderOpen size={18} />,
+            name: 'Open Logs',
+            href: '/user/open-inquiry-logs',
         },
         {
             icon: <User size={18} />,

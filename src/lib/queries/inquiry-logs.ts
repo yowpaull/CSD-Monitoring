@@ -19,6 +19,10 @@ import type {
 /**
  * Relations are embedded rather than joined in JS so Postgres does the
  * work. Aliases keep the payload shaped like `InquiryLogRow`.
+ *
+ * `log_inquiries` has two foreign keys into `profiles` (representative_id
+ * and updated_by), so each embed must name its key with `!fk_column` —
+ * plain `profiles(...)` is ambiguous and PostgREST rejects it (PGRST201).
  */
 const LOG_SELECT = `
     id,
@@ -42,7 +46,8 @@ const LOG_SELECT = `
     updated_at,
     platform:platforms ( id, name ),
     brand:brands ( id, name ),
-    representative:profiles ( id, full_name, email ),
+    representative:profiles!representative_id ( id, full_name, email ),
+    updated_by_profile:profiles!updated_by ( id, full_name, email ),
     sub_category:inquiry_sub_categories (
         id,
         name,
@@ -174,8 +179,9 @@ function buildLogQuery(
     }
 
     // In `own` scope the representative is already pinned, so applying
-    // the dropdown too would only ever produce an empty result.
-    if (filters.representative_id && scope === 'admin') {
+    // the dropdown too would only ever produce an empty result. `open`
+    // and `admin` both show other people's logs, so the filter is live.
+    if (filters.representative_id && scope !== 'own') {
         query = query.eq(
             'representative_id',
             filters.representative_id
@@ -189,7 +195,11 @@ function buildLogQuery(
         );
     }
 
-    if (filters.status) {
+    // The open pool covers both in-flight statuses, so the status filter
+    // is ignored there. Everywhere else it narrows the listing.
+    if (scope === 'open') {
+        query = query.in('status', ['Open', 'Pending']);
+    } else if (filters.status) {
         query = query.eq('status', filters.status);
     }
 
