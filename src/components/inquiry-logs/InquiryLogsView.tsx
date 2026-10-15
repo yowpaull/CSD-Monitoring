@@ -59,7 +59,7 @@ type InquiryLogsViewProps = {
     options: InquiryLogFilterOptions;
 };
 
-const COLUMN_COUNT = 20;
+const COLUMN_COUNT = 21;
 
 const TH_CLASS =
     'px-4 py-3 text-left text-xs font-semibold whitespace-nowrap text-gray-500';
@@ -440,8 +440,10 @@ export default function InquiryLogsView({
                         </FilterField>
 
                         {/* Pinned to the signed-in representative in
-                            `own` scope, so the dropdown is redundant. */}
-                        {scope === 'admin' && (
+                            `own` scope, so the dropdown is redundant.
+                            `open` and `admin` show other people's logs,
+                            so filtering by representative is useful. */}
+                        {scope !== 'own' && (
                             <FilterField
                                 label="Representative"
                                 htmlFor="representative_id"
@@ -513,23 +515,27 @@ export default function InquiryLogsView({
                             </select>
                         </FilterField>
 
-                        <FilterField label="Status" htmlFor="status">
-                            <select
-                                id="status"
-                                name="status"
-                                defaultValue={filters.status}
-                                onChange={handleAutoApply}
-                                className={CONTROL_CLASS}
-                            >
-                                <option value="">All statuses</option>
+                        {/* The open pool is always Open, so a status
+                            filter there would only ever be redundant. */}
+                        {scope !== 'open' && (
+                            <FilterField label="Status" htmlFor="status">
+                                <select
+                                    id="status"
+                                    name="status"
+                                    defaultValue={filters.status}
+                                    onChange={handleAutoApply}
+                                    className={CONTROL_CLASS}
+                                >
+                                    <option value="">All statuses</option>
 
-                                {options.statuses.map((status) => (
-                                    <option key={status} value={status}>
-                                        {status}
-                                    </option>
-                                ))}
-                            </select>
-                        </FilterField>
+                                    {options.statuses.map((status) => (
+                                        <option key={status} value={status}>
+                                            {status}
+                                        </option>
+                                    ))}
+                                </select>
+                            </FilterField>
+                        )}
 
                         <FilterField
                             label="Created Date"
@@ -750,6 +756,9 @@ export default function InquiryLogsView({
                                         Updated At
                                     </th>
                                     <th className={TH_CLASS}>
+                                        Last Updated By
+                                    </th>
+                                    <th className={TH_CLASS}>
                                         Actions
                                     </th>
                                 </tr>
@@ -772,6 +781,7 @@ export default function InquiryLogsView({
                                         <LogRow
                                             key={row.id}
                                             row={row}
+                                            scope={scope}
                                             onOpenModal={(modal) =>
                                                 setActiveModal({
                                                     row,
@@ -954,9 +964,11 @@ function PageLink({
 
 function LogRow({
     row,
+    scope,
     onOpenModal,
 }: {
     row: InquiryLogRow;
+    scope: InquiryLogScope;
     onOpenModal: (modal: LogRowModal) => void;
 }) {
     const inquiry = formatTimestampParts(row.inquiry_datetime);
@@ -1124,32 +1136,63 @@ function LogRow({
                 </div>
             </td>
 
+            {/* Last Updated By */}
+            <td className={TD_CLASS}>
+                <span className="whitespace-nowrap text-gray-900">
+                    {row.updated_by_profile?.full_name ||
+                        row.updated_by_profile?.email ||
+                        '—'}
+                </span>
+            </td>
+
             {/* Actions */}
             <td className={TD_CLASS}>
                 <div className="flex gap-2">
-                    <button
-                        type="button"
-                        onClick={() => onOpenModal({ kind: 'view' })}
-                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                    >
-                        View
-                    </button>
+                    {scope === 'open' ? (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => onOpenModal({ kind: 'edit' })}
+                                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                            >
+                                Continue
+                            </button>
 
-                    <button
-                        type="button"
-                        onClick={() => onOpenModal({ kind: 'edit' })}
-                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                    >
-                        Edit
-                    </button>
+                            <button
+                                type="button"
+                                onClick={() => onOpenModal({ kind: 'close' })}
+                                className="rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500/30"
+                            >
+                                Close
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => onOpenModal({ kind: 'view' })}
+                                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                            >
+                                View
+                            </button>
 
-                    <button
-                        type="button"
-                        onClick={() => onOpenModal({ kind: 'delete' })}
-                        className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500/30"
-                    >
-                        Delete
-                    </button>
+                            <button
+                                type="button"
+                                onClick={() => onOpenModal({ kind: 'edit' })}
+                                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                            >
+                                Edit
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => onOpenModal({ kind: 'delete' })}
+                                className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                            >
+                                Delete
+                            </button>
+                        </>
+                    )}
                 </div>
             </td>
         </tr>
