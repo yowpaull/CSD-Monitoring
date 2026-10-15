@@ -20,7 +20,23 @@ CREATE POLICY "Users and admins can view profiles"
 ON public.profiles
     FOR SELECT
     TO authenticated
-    USING (true);
+    USING (
+        id = auth.uid()
+        OR EXISTS (
+            SELECT 1
+            FROM public.log_inquiries li
+            WHERE
+                (
+                    public.is_admin()
+                    OR li.representative_id = auth.uid()
+                    OR li.status = 'Open'
+                )
+                AND (
+                    li.representative_id = public.profiles.id
+                    OR li.updated_by = public.profiles.id
+                )
+        )
+    );
 
 -- 3. Relax log_inquiries SELECT: everyone sees their own logs plus every
 --    Open log from any colleague.
