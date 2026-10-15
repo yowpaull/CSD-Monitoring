@@ -1,5 +1,7 @@
 'use client';
 
+import Link from "next/link";
+
 import { Sparkles } from "lucide-react";
 
 import PasswordInput from "@/components/PasswordInput";
@@ -74,9 +76,22 @@ export default function Home() {
             </div>
 
             <div className="flex flex-col gap-2 w-full">
-              <label htmlFor="password" className="text-sm font-medium text-slate-700">
-                Password
-              </label>
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="password"
+                  className="text-sm font-medium text-slate-700"
+                >
+                  Password
+                </label>
+
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+
               <PasswordInput
                 name="password"
                 id="password"
@@ -84,8 +99,11 @@ export default function Home() {
                 placeholder="Enter your password"
                 className={INPUT_CLASS}
               />
+
               {state.fieldErrors?.password && (
-                <p className="text-red-500 text-xs">{state.fieldErrors.password[0]}</p>
+                <p className="text-red-500 text-xs">
+                  {state.fieldErrors.password[0]}
+                </p>
               )}
             </div>
 

@@ -47,6 +47,38 @@ export const updateProfileSchema = z.object({
         .min(2, { message: 'Full name must be at least 2 characters long' }),
 });
 
+/** Requesting a password-reset email — the only field is the address. */
+export const forgotPasswordSchema = z.object({
+    email: z
+        .string()
+        .trim()
+        .email({ message: 'Email must be a valid email address' })
+        .min(1, { message: 'Email is required' }),
+});
+
+/**
+ * Setting a new password from a reset link. There is no current
+ * password to confirm because the emailed recovery session is the
+ * proof of identity; strength rules match the rest of the app.
+ */
+export const resetPasswordSchema = z
+    .object({
+        password: z
+            .string()
+            .min(8, { message: 'Password must be at least 8 characters long' })
+            .regex(passwordRegex, {
+                message:
+                    'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number',
+            }),
+        confirm_password: z
+            .string()
+            .min(1, { message: 'Confirm password is required' }),
+    })
+    .refine((data) => data.password === data.confirm_password, {
+        message: 'Passwords do not match',
+        path: ['confirm_password'],
+    });
+
 /**
  * Password strength mirrors `createMemberSchema` on purpose: one
  * definition of "strong enough" for the whole app, and members already

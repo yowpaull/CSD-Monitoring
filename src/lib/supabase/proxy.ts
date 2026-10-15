@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { PASSWORD_RESET_COOKIE } from '@/lib/password-reset'
+
 const LOGIN_PATH = '/'
 const ADMIN_HOME = '/admin/dashboard'
 // Must match the user area's landing route. There is no /user/task route,
@@ -10,7 +12,11 @@ const USER_HOME = '/user/log'
 function isPublicPath(pathname: string) {
     return (
         pathname === LOGIN_PATH ||
-        pathname.startsWith('/auth/')
+        pathname.startsWith('/auth/') ||
+        // Requesting a reset link happens before any session exists, so
+        // the page must be reachable while signed out. Completion at
+        // /reset-password is gated by the recovery session instead.
+        pathname === '/forgot-password'
     )
 }
 
@@ -85,6 +91,22 @@ export async function updateSession(request: NextRequest) {
     // account holder via updateUserMetadata, so trusting it here would let a
     // non-admin grant themselves access to /admin.
     const role = profile?.role ?? 'user'
+
+    // A fresh recovery exchange hands out a real session, but that
+    // session's only legitimate job is finishing the password reset. While
+    // the recovery marker (set by /auth/callback) is present, confine the
+    // browser to /reset-password so a reset link can't be used to browse
+    // the app without ever changing the password. The marker is deleted on
+    // a successful reset and falls off once it expires.
+    if (
+        request.cookies.get(PASSWORD_RESET_COOKIE) &&
+        pathname !== '/reset-password' &&
+        !pathname.startsWith('/auth/')
+    ) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/reset-password'
+        return NextResponse.redirect(url)
+    }
 
     // Logged-in users don't need the login page — send them home by role.
     if (pathname === LOGIN_PATH) {

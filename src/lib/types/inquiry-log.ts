@@ -10,6 +10,8 @@
 export type InquiryLogScope = 'admin' | 'own';
 
 export type InquiryLogFilters = {
+    /** Case-insensitive substring match on `customer_name`. */
+    customer_name: string;
     brand_id: string;
     platform_id: string;
     representative_id: string;
