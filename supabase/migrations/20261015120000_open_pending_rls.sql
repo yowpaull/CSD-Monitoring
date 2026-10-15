@@ -62,9 +62,9 @@ ON public.log_inquiries
     );
 
 -- UPDATE ------------------------------------------------------------------
--- USING gates which existing rows are touchable (own, a colleague's
--- Open/Pending, or all for admins); WITH CHECK permits the resulting
--- status, including the `Closed` written by the close confirmation.
+-- Direct UPDATE is limited to owners/admins to prevent non-owner edits to
+-- business/audit fields on colleague rows. Cross-representative "close"
+-- actions should be implemented via a controlled SECURITY DEFINER RPC.
 DROP POLICY IF EXISTS "Users can update own logs, admins can update all"
     ON public.log_inquiries;
 DROP POLICY IF EXISTS "Users can update own logs, open logs, admins can update all"
@@ -79,10 +79,8 @@ ON public.log_inquiries
     USING (
         public.is_admin()
         OR representative_id = auth.uid()
-        OR status IN ('Open', 'Pending')
     )
     WITH CHECK (
         public.is_admin()
         OR representative_id = auth.uid()
-        OR status IN ('Open', 'Pending', 'Closed')
     );
