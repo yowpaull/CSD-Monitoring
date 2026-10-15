@@ -3,6 +3,7 @@
 import LogForm, { type LogFormValues } from '@/app/user/log/LogForm';
 import {
     ActionResult,
+    closeLog,
     deleteLog,
     updateLog,
 } from '@/lib/actions/log';
@@ -370,6 +371,14 @@ export function LogDetailsModal({
                             label="Updated At"
                             value={`${updated.date} · ${updated.time}`}
                         />
+                        <DetailItem
+                            label="Last Updated By"
+                            value={
+                                row.updated_by_profile?.full_name ||
+                                row.updated_by_profile?.email ||
+                                '—'
+                            }
+                        />
                     </dl>
                 </div>
             </div>
@@ -567,6 +576,125 @@ export function LogDeleteModal({
     );
 }
 
+/* =========================================================
+   CLOSE (confirmation)
+   ========================================================= */
+
+export function LogCloseModal({
+    row,
+    onClose,
+}: {
+    row: InquiryLogRow;
+    onClose: () => void;
+}) {
+    const router = useRouter();
+
+    const [state, formAction, isPending] = useActionState(
+        closeLog,
+        initialState
+    );
+
+    /*
+     * Toasts are fired here rather than through `useActionToast` so the
+     * confirmation is not dependent on the hook's precedence chain (a
+     * `fieldErrors` payload would otherwise swallow the success message).
+     * `lastHandled` mirrors the hook's guard against duplicate fires.
+     */
+    const lastHandled = useRef<ActionResult | null>(null);
+
+    const succeeded = Boolean(state?.success);
+
+    useEffect(() => {
+        if (!state) return;
+        if (lastHandled.current === state) return;
+        if (!state.error && !state.success) return;
+
+        lastHandled.current = state;
+
+        if (state.error) {
+            toast.error(state.error);
+            return;
+        }
+
+        toast.success(state.message ?? 'Inquiry log closed.');
+    }, [state]);
+
+    const handleSuccess = useCallback(() => {
+        router.refresh();
+        setTimeout(onClose, 900);
+    }, [router, onClose]);
+
+    useEffect(() => {
+        if (!succeeded) return;
+        handleSuccess();
+    }, [succeeded, handleSuccess]);
+
+    const customer = row.customer_name?.trim() || 'this inquiry log';
+    const thread = row.thread_number
+        ? ` (thread #${row.thread_number.toLocaleString()})`
+        : '';
+
+    return (
+        <ModalShell
+            onClose={onClose}
+            ariaLabel="Close inquiry log"
+            title="Close Inquiry Log"
+            subtitle="Mark this inquiry as resolved."
+        >
+            <form action={formAction}>
+                <input type="hidden" name="id" value={row.id} />
+
+                <div className="p-6">
+                    <p className="text-sm text-slate-700">
+                        Are you sure you want to close{' '}
+                        <span className="font-semibold text-slate-900">
+                            {customer}
+                            {thread}
+                        </span>
+                        ? Its status will be set to{' '}
+                        <span className="font-semibold text-slate-900">
+                            Closed
+                        </span>
+                        .
+                    </p>
+
+                    {state?.error && (
+                        <p role="alert" className="mt-4 text-xs text-red-600">
+                            {state.error}
+                        </p>
+                    )}
+                </div>
+
+                <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={isPending}
+                        className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        type="submit"
+                        disabled={isPending}
+                        aria-disabled={isPending}
+                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                        {isPending && (
+                            <span
+                                aria-hidden="true"
+                                className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                            />
+                        )}
+                        {isPending ? 'Closing...' : 'Close Inquiry'}
+                    </button>
+                </div>
+            </form>
+        </ModalShell>
+    );
+}
+
 /**
  * Renders exactly one of the three row modals, or nothing.
  *
@@ -577,6 +705,7 @@ export function LogDeleteModal({
 export type LogRowModal =
     | { kind: 'view' }
     | { kind: 'edit' }
+    | { kind: 'close' }
     | { kind: 'delete' };
 
 const LogRowModals = memo(function LogRowModals({
@@ -597,13 +726,11 @@ const LogRowModals = memo(function LogRowModals({
     }
 
     if (modal.kind === 'edit') {
-        return (
-            <LogEditModal
-                row={row}
-                options={options}
-                onClose={onClose}
-            />
-        );
+        return <LogEditModal row={row} options={options} onClose={onClose} />;
+    }
+
+    if (modal.kind === 'close') {
+        return <LogCloseModal row={row} onClose={onClose} />;
     }
 
     return (

@@ -6,8 +6,9 @@
 /**
  * `admin` sees every representative's logs.
  * `own` is hard-scoped to the signed-in representative.
+ * `open` is the shared pool: every Open log, from any representative.
  */
-export type InquiryLogScope = 'admin' | 'own';
+export type InquiryLogScope = 'admin' | 'own' | 'open';
 
 export type InquiryLogFilters = {
     /** Case-insensitive substring match on `customer_name`. */
@@ -90,6 +91,8 @@ export type InquiryLogRow = {
     platform: InquiryLogNamedOption | null;
     brand: InquiryLogNamedOption | null;
     representative: InquiryLogRepresentative | null;
+    /** Who last edited the log; null when it has only ever been filed. */
+    updated_by_profile: InquiryLogRepresentative | null;
     sub_category: {
         id: string;
         name: string;

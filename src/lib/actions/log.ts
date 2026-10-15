@@ -160,6 +160,7 @@ function attendedRangeError(start: string, end: string) {
 function revalidateLogLists() {
     revalidatePath('/admin/inquiry-logs');
     revalidatePath('/user/logs');
+    revalidatePath('/user/open-inquiry-logs');
 }
 
 export async function log(
@@ -259,6 +260,10 @@ export async function log(
 
             // Automatically comes from authenticated user
             representative_id,
+
+            // Seed "Last Updated By" with the filer; the first real edit
+            // overwrites it with whoever actually changed the log.
+            updated_by: representative_id,
         });
 
     /*
@@ -380,6 +385,10 @@ export async function updateLog(
              * does), so this column only moves if the action moves it.
              */
             updated_at: new Date().toISOString(),
+
+            // "Last Updated By" tracks whoever is making this edit, which
+            // for the shared open pool is often a colleague, not the owner.
+            updated_by: user.id,
         })
         .eq('id', id)
         .select('id');
@@ -480,5 +489,78 @@ export async function deleteLog(
     return {
         success: true,
         message: 'Inquiry log deleted.',
+    };
+}
+
+/**
+ * Closes an Open/Pending log.
+ *
+ * A lightweight alternative to `updateLog` for the open pool: it only
+ * touches status + audit columns, so the caller does not need to submit the
+ * whole record. RLS decides whether the row is closeable (own, or a
+ * colleague's Open/Pending log), and the returned row count distinguishes a
+ * real close from a silently denied one.
+ */
+export async function closeLog(
+    _prevState: ActionResult | null,
+    formData: FormData
+): Promise<ActionResult> {
+
+    const supabase = await createClient();
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+        return {
+            error: 'You must be logged in.',
+        };
+    }
+
+    const id = String(
+        formData.get('id') ?? ''
+    ).trim();
+
+    if (!id) {
+        return {
+            error: 'Missing inquiry log id.',
+        };
+    }
+
+    const { data: updated, error } = await supabase
+        .from('log_inquiries')
+        .update({
+            status: 'Closed',
+            updated_at: new Date().toISOString(),
+            updated_by: user.id,
+        })
+        .eq('id', id)
+        .select('id');
+
+    if (error) {
+        console.error(
+            'Failed to close inquiry log:',
+            error
+        );
+
+        return {
+            error:
+                'Failed to close the inquiry log. Please try again.',
+        };
+    }
+
+    if (!updated || updated.length === 0) {
+        return {
+            error:
+                'That inquiry log no longer exists, or you do not have permission to close it.',
+        };
+    }
+
+    revalidateLogLists();
+
+    return {
+        success: true,
+        message: 'Inquiry log closed.',
     };
 }
