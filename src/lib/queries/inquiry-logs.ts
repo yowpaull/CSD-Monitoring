@@ -12,8 +12,10 @@ import {
 import type {
     InquiryLogFilterOptions,
     InquiryLogFilters,
+    InquiryLogRepresentative,
     InquiryLogRow,
     InquiryLogScope,
+    InquiryLogUpdateEntry,
 } from '@/lib/types/inquiry-log';
 
 /**
@@ -65,6 +67,142 @@ const EMPTY_RESULT = {
     totalPages: 0,
     page: 1,
 };
+
+/**
+ * Fetched alongside the page and grouped onto each row in JS.
+ *
+ * Deliberately a second query rather than an embed in `LOG_SELECT`: if the
+ * trail table is ever unavailable, only the "+N" badge degrades -- the list
+ * itself still renders. Embedding it would turn that absence into a blank
+ * table, which is exactly the failure this code path must not repeat.
+ */
+const UPDATE_HISTORY_SELECT = `
+    log_id,
+    created_at,
+    status,
+    updater:profiles!updated_by ( id, full_name, email )
+`;
+
+type FetchedUpdateEntry = InquiryLogUpdateEntry & { log_id: string };
+
+async function attachUpdateHistory(
+    supabase: LogQueryClient,
+    rows: InquiryLogRow[]
+): Promise<InquiryLogRow[]> {
+    if (rows.length === 0) return rows;
+
+    const { data, error } = await supabase
+        .from('log_inquiry_updates')
+        .select(UPDATE_HISTORY_SELECT)
+        .in(
+            'log_id',
+            rows.map((row) => row.id)
+        )
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error(
+            'Failed to load inquiry log update history:',
+            error
+        );
+        return rows;
+    }
+
+    const byLog = new Map<string, InquiryLogUpdateEntry[]>();
+
+    for (const entry of (data ?? []) as unknown as FetchedUpdateEntry[]) {
+        const trail = byLog.get(entry.log_id);
+
+        if (trail) {
+            trail.push(entry);
+        } else {
+            byLog.set(entry.log_id, [entry]);
+        }
+    }
+
+    return rows.map((row) => ({
+        ...row,
+        update_history: byLog.get(row.id) ?? [],
+    }));
+}
+
+/**
+ * `closed_by` / `closed_at`, for the rows that are actually closed.
+ *
+ * Same failure-tolerance as the trail above, for the same reason: the pair
+ * lives on the logs themselves but is fetched from them separately rather
+ * than embedded in `LOG_SELECT`, so a database that has not received the
+ * column yet only loses the "Closed By" rows in the detail modal -- the
+ * table keeps rendering. Closed rows are all a closed row can describe, so
+ * an open pool page skips the request entirely.
+ */
+const CLOSE_INFO_SELECT = `
+    id,
+    closed_at,
+    closed_by_profile:profiles!closed_by ( id, full_name, email )
+`;
+
+type FetchedCloseInfo = {
+    id: string;
+    closed_at: string | null;
+    closed_by_profile: InquiryLogRepresentative | null;
+};
+
+async function attachCloseInfo(
+    supabase: LogQueryClient,
+    rows: InquiryLogRow[]
+): Promise<InquiryLogRow[]> {
+    const closedIds = rows
+        .filter((row) => row.status === 'Closed')
+        .map((row) => row.id);
+
+    if (closedIds.length === 0) return rows;
+
+    const { data, error } = await supabase
+        .from('log_inquiries')
+        .select(CLOSE_INFO_SELECT)
+        .in('id', closedIds);
+
+    if (error) {
+        console.error(
+            'Failed to load close attribution:',
+            error
+        );
+        return rows;
+    }
+
+    const byId = new Map(
+        ((data ?? []) as unknown as FetchedCloseInfo[]).map((info) => [
+            info.id,
+            info,
+        ])
+    );
+
+    return rows.map((row) => {
+        const info = byId.get(row.id);
+
+        if (!info) return row;
+
+        return {
+            ...row,
+            closed_at: info.closed_at,
+            closed_by_profile: info.closed_by_profile,
+        };
+    });
+}
+
+/**
+ * Both derived passes, in a fixed order. Each spreads the rows it is given,
+ * so whichever runs second preserves what the first attached.
+ */
+async function attachRowDetails(
+    supabase: LogQueryClient,
+    rows: InquiryLogRow[]
+): Promise<InquiryLogRow[]> {
+    const withCloseInfo = await attachCloseInfo(supabase, rows);
+
+    return attachUpdateHistory(supabase, withCloseInfo);
+}
 
 /**
  * Dropdown options for the filter panel.
@@ -309,8 +447,15 @@ export async function getInquiryLogs({
             rows = (retry ?? []) as unknown as InquiryLogRow[];
         }
 
-        return { rows, totalCount, totalPages, page: totalPages };
+        return {
+            rows: await attachRowDetails(supabase, rows),
+            totalCount,
+            totalPages,
+            page: totalPages,
+        };
     }
+
+    rows = await attachRowDetails(supabase, rows);
 
     return {
         // Without generated Supabase types the embed shapes come back

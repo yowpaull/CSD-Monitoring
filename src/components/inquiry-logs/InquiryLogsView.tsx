@@ -959,6 +959,37 @@ function PageLink({
 
 
 /* =========================================================
+   LAST UPDATED BY
+   ========================================================= */
+
+/**
+ * The most recent editor. `updated_by_profile` is what the server actions
+ * maintain on every edit, so it leads; the trail's head only takes over for
+ * logs seeded by the trail migration, where the row itself has no
+ * `updated_by` yet every entry does.
+ */
+function lastUpdatedByName(row: InquiryLogRow): string {
+    const head = row.update_history?.[0]?.updater;
+
+    return (
+        row.updated_by_profile?.full_name ||
+        row.updated_by_profile?.email ||
+        head?.full_name ||
+        head?.email ||
+        '—'
+    );
+}
+
+/**
+ * How many editors in the trail are not the one being named -- the "+N"
+ * behind it. The trail only exists while a log was Open or Pending, so a
+ * log closed before the trail existed simply shows a bare name.
+ */
+function extraEditorCount(row: InquiryLogRow): number {
+    return Math.max(0, (row.update_history?.length ?? 0) - 1);
+}
+
+/* =========================================================
    TABLE ROW
    ========================================================= */
 
@@ -1139,9 +1170,12 @@ function LogRow({
             {/* Last Updated By */}
             <td className={TD_CLASS}>
                 <span className="whitespace-nowrap text-gray-900">
-                    {row.updated_by_profile?.full_name ||
-                        row.updated_by_profile?.email ||
-                        '—'}
+                    {lastUpdatedByName(row)}
+                    {extraEditorCount(row) > 0 && (
+                        <span className="ml-1 text-xs font-medium text-slate-500">
+                            (+{extraEditorCount(row)})
+                        </span>
+                    )}
                 </span>
             </td>
 
