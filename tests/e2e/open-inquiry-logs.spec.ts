@@ -111,6 +111,28 @@ test.describe('Open Inquiry Logs', () => {
         await expect(
             page.getByRole('row').filter({ hasText: customer })
         ).toHaveCount(0);
+
+        // ...and the closer is attributed on the log itself, surfaced in
+        // the detail modal's Record Information.
+        await page.goto('/user/logs');
+        const closedRow = page.getByRole('row').filter({ hasText: customer });
+        await expect(closedRow).toBeVisible();
+
+        await closedRow.getByRole('button', { name: 'View' }).click();
+        const details = modal(page, 'Inquiry Log Details');
+        await expect(details).toBeVisible();
+
+        await expect(
+            details.getByText('Closed By', { exact: true })
+        ).toBeVisible();
+
+        const closedValue = (label: string) =>
+            details
+                .locator('dt', { hasText: label })
+                .locator('xpath=following-sibling::dd[1]');
+
+        await expect(closedValue('Closed By')).not.toHaveText('—');
+        await expect(closedValue('Closed At')).not.toHaveText('—');
     });
 
     test('Continue opens the edit form with the stored status intact', async ({
@@ -176,5 +198,48 @@ test.describe('Open Inquiry Logs', () => {
         await expect(
             page.getByRole('row').filter({ hasText: customer })
         ).toHaveCount(0);
+    });
+
+    test('records every editor while the log stays open, with a count in the column', async ({
+        page,
+    }) => {
+        const customer = `E2E Trail ${uniqueId()}`;
+        await createOpenLog(page, customer);
+
+        await page.goto('/user/open-inquiry-logs');
+        let row = page.getByRole('row').filter({ hasText: customer });
+        await expect(row).toBeVisible();
+
+        // Filing the log is the trail's first entry, so there is nothing
+        // to collapse behind a count yet.
+        await expect(row).not.toContainText('(+');
+
+        // A single edit adds a second editor to the trail.
+        await row.getByRole('button', { name: 'Continue' }).click();
+        const editModal = modal(page, 'Edit Inquiry Log');
+        await expect(editModal).toBeVisible();
+
+        await editModal
+            .locator('[name=remarks]')
+            .fill(`Trail test edit ${uniqueId()}`);
+        await editModal.getByRole('button', { name: 'Save Changes' }).click();
+        await expectToast(page, 'Inquiry log updated.');
+        await expect(editModal).toBeHidden();
+
+        row = page.getByRole('row').filter({ hasText: customer });
+        await expect(row).toContainText('(+1)');
+
+        // The full list lives in the detail modal, reached from the
+        // own-logs page (the pool only offers Continue and Close).
+        await page.goto('/user/logs');
+        row = page.getByRole('row').filter({ hasText: customer });
+        await expect(row).toBeVisible();
+
+        await row.getByRole('button', { name: 'View' }).click();
+        const details = modal(page, 'Inquiry Log Details');
+        await expect(details).toBeVisible();
+
+        await expect(details.getByText('Update History')).toBeVisible();
+        await expect(details.locator('ol li')).toHaveCount(2);
     });
 });
