@@ -48,6 +48,18 @@ export type InquiryLogNamedOption = {
     name: string;
 };
 
+/**
+ * One entry of a log's update trail, newest first when it reaches the UI.
+ *
+ * `status` is the state the log was in at the moment of the edit, which is
+ * always Open or Pending -- the trail freezes once a log is closed.
+ */
+export type InquiryLogUpdateEntry = {
+    created_at: string;
+    status: string;
+    updater: InquiryLogRepresentative | null;
+};
+
 export type InquiryLogRepresentative = {
     id: string;
     full_name: string | null;
@@ -93,6 +105,20 @@ export type InquiryLogRow = {
     representative: InquiryLogRepresentative | null;
     /** Who last edited the log; null when it has only ever been filed. */
     updated_by_profile: InquiryLogRepresentative | null;
+    /**
+     * Who closed the log and when. Set by a database trigger on the
+     * Open/Pending -> Closed transition, so it survives later edits and
+     * clears if the log is reopened. Both arrive with the list query and
+     * are absent when the database predates the column.
+     */
+    closed_at?: string | null;
+    closed_by_profile?: InquiryLogRepresentative | null;
+    /**
+     * Everyone who has edited the log while it was Open or Pending,
+     * newest first. Absent until the list query attaches it (and empty
+     * for logs closed before the trail existed).
+     */
+    update_history?: InquiryLogUpdateEntry[];
     sub_category: {
         id: string;
         name: string;

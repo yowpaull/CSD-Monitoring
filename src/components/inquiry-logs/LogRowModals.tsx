@@ -224,6 +224,9 @@ export function LogDetailsModal({
     const inquiry = formatTimestampParts(row.inquiry_datetime);
     const created = formatTimestampParts(row.created_at);
     const updated = formatTimestampParts(row.updated_at);
+    const closed = row.closed_at
+        ? formatTimestampParts(row.closed_at)
+        : null;
 
     const mainCategory = row.sub_category?.main_category;
 
@@ -234,6 +237,9 @@ export function LogDetailsModal({
 
     const orDash = (value: string | null | undefined) =>
         value && value.trim().length > 0 ? value : '—';
+
+    /** Newest first, as the list query attached it. */
+    const history = row.update_history ?? [];
 
     return (
         <ModalShell
@@ -376,10 +382,67 @@ export function LogDetailsModal({
                             value={
                                 row.updated_by_profile?.full_name ||
                                 row.updated_by_profile?.email ||
+                                history[0]?.updater?.full_name ||
+                                history[0]?.updater?.email ||
                                 '—'
                             }
                         />
+
+                        {row.status === 'Closed' && (
+                            <>
+                                <DetailItem
+                                    label="Closed By"
+                                    value={
+                                        row.closed_by_profile?.full_name ||
+                                        row.closed_by_profile?.email ||
+                                        '—'
+                                    }
+                                />
+                                <DetailItem
+                                    label="Closed At"
+                                    value={
+                                        closed
+                                            ? `${closed.date} · ${closed.time}`
+                                            : '—'
+                                    }
+                                />
+                            </>
+                        )}
                     </dl>
+
+                    {history.length > 0 && (
+                        <div className="mt-5">
+                            <h4 className="text-sm font-semibold text-slate-900">
+                                Update History
+                            </h4>
+
+                            <ol className="mt-2 space-y-1.5">
+                                {history.map((entry, index) => {
+                                    const stamp = formatTimestampParts(
+                                        entry.created_at
+                                    );
+
+                                    return (
+                                        <li
+                                            key={`${entry.created_at}-${index}`}
+                                            className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5"
+                                        >
+                                            <span className="text-sm font-medium text-slate-800">
+                                                {entry.updater?.full_name ||
+                                                    entry.updater?.email ||
+                                                    '—'}
+                                            </span>
+
+                                            <span className="text-xs text-slate-400">
+                                                {stamp.date} · {stamp.time} ·{' '}
+                                                {entry.status}
+                                            </span>
+                                        </li>
+                                    );
+                                })}
+                            </ol>
+                        </div>
+                    )}
                 </div>
             </div>
 
